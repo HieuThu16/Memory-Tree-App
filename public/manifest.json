@@ -1,0 +1,17 @@
+{
+  "name": "Memory Tree",
+  "short_name": "Memory Tree",
+  "description": "Grow your memories into a living tree.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4ecd8",
+  "theme_color": "#f4ecd8",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
