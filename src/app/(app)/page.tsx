@@ -1,5 +1,3 @@
-import MemoryTree from "@/components/tree/MemoryTree";
-import MemoryList from "@/components/memory/MemoryList";
 import {
   getPersonalMemories,
   getMemoryStats,
@@ -14,42 +12,22 @@ export default async function HomePage() {
   ]);
 
   return (
-    <main className="px-6 pb-24 pt-8">
-      <section className="mx-auto flex w-full max-w-6xl flex-col gap-10">
-        <header className="flex flex-col gap-5 pt-4">
-          <div className="flex flex-col gap-3">
-            <h1 className="text-4xl text-foreground md:text-5xl lg:text-6xl animate-fade-in-up">
-              Kỷ niệm lớn lên<br />
-              <span className="bg-gradient-to-r from-accent to-gold bg-clip-text text-transparent">
-                theo thời gian
-              </span>
-            </h1>
-            <p className="max-w-xl text-sm leading-relaxed text-text-secondary md:text-base animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
-              Hãy để Memory Tree lưu giữ những khoảnh khắc quý giá nhất.
-              Mỗi nút trên cây là một câu chuyện, một cảm xúc có thể sống mãi.
-            </p>
+    <main className="px-3 pb-24 pt-3 sm:px-6 sm:pt-4">
+      <section className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:gap-4">
+        {/* Compact stats bar */}
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="text-base font-semibold text-foreground sm:text-lg">
+            🌳 Cây Kỉ Niệm
+          </h1>
+          <div className="flex gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2.5 py-1 text-[10px] font-semibold text-text-secondary">
+              🌸 {stats.total}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2.5 py-1 text-[10px] font-semibold text-text-secondary">
+              📷 {stats.photo + stats.video}
+            </span>
           </div>
-
-          <div
-            className="mt-4 flex gap-4 animate-fade-in-up"
-            style={{ animationDelay: "0.2s" }}
-          >
-            <div className="glass-card flex min-w-28 flex-col rounded-2xl p-4">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">
-                Tổng cộng
-              </span>
-              <span className="stat-number mt-2">{stats.total}</span>
-            </div>
-            <div className="glass-card flex min-w-28 flex-col rounded-2xl p-4">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">
-                Ảnh & Video
-              </span>
-              <span className="stat-number mt-2">
-                {stats.photo + stats.video}
-              </span>
-            </div>
-          </div>
-        </header>
+        </div>
 
         <ClientSection memories={memories} />
       </section>
@@ -57,5 +35,4 @@ export default async function HomePage() {
   );
 }
 
-// Extract the tree and list to a client component to cleanly handle store interactions
 import ClientSection from "./ClientSection";

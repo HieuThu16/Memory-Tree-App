@@ -1,11 +1,14 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 
-export default function TreeParticles({ width, height }: { width: number; height: number }) {
-  const reduceMotion = useReducedMotion();
-
+function TreeParticlesLayer({
+  width,
+  height,
+}: {
+  width: number;
+  height: number;
+}) {
   const particles = useMemo(() => {
     let seed = 42;
     const rand = () => {
@@ -13,46 +16,31 @@ export default function TreeParticles({ width, height }: { width: number; height
       return (seed - 1) / 2147483646;
     };
 
-    return Array.from({ length: 14 }).map((_, index) => {
+    return Array.from({ length: 6 }).map((_, index) => {
       const x = 80 + rand() * (width - 160);
-      const y = 60 + rand() * (height - 220);
+      const y = 56 + rand() * Math.max(120, height - 180);
       return {
         id: index,
         x,
         y,
-        r: 2.5 + rand() * 3,
-        delay: rand() * 2,
-        duration: 5 + rand() * 4,
-        drift: 8 + rand() * 12,
+        r: 2.5 + rand() * 2,
       };
     });
   }, [width, height]);
 
   return (
-    <g opacity={0.7}>
+    <g opacity={0.46}>
       {particles.map((particle) => (
-        <motion.circle
+        <circle
           key={particle.id}
           cx={particle.x}
           cy={particle.y}
           r={particle.r}
-          fill="#d7a66a"
-          initial={reduceMotion ? undefined : { opacity: 0 }}
-          animate={
-            reduceMotion
-              ? undefined
-              : {
-                  opacity: [0, 1, 0.8],
-                  y: [0, -particle.drift, 0],
-                }
-          }
-          transition={{
-            duration: particle.duration,
-            repeat: Infinity,
-            delay: particle.delay,
-          }}
+          fill={particle.id % 2 === 0 ? "#b7a4ff" : "#88d8ab"}
         />
       ))}
     </g>
   );
 }
+
+export default memo(TreeParticlesLayer);

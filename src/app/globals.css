@@ -1,24 +1,24 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0f0d0a;
-  --foreground: #f5efe6;
-  --surface: #1a1612;
-  --surface-2: #241f19;
-  --surface-3: #2e2720;
-  --accent: #c8956c;
-  --accent-soft: #a07350;
-  --accent-glow: #e8a96840;
-  --gold: #f5c97a;
-  --green: #78b890;
-  --green-soft: #5f8f71;
-  --rose: #d9897a;
-  --border: rgba(200, 149, 108, 0.12);
-  --border-strong: rgba(200, 149, 108, 0.25);
-  --text-muted: rgba(245, 239, 230, 0.5);
-  --text-secondary: rgba(245, 239, 230, 0.7);
-  --shadow-card: 0 24px 80px -30px rgba(0, 0, 0, 0.6);
-  --shadow-float: 0 8px 32px -8px rgba(0, 0, 0, 0.5);
+  --background: #f5f0e8;
+  --foreground: #2f2743;
+  --surface: rgba(255, 255, 255, 0.82);
+  --surface-2: #f6f0ff;
+  --surface-3: #ece4ff;
+  --accent: #7c5ce6;
+  --accent-soft: #a38dff;
+  --accent-glow: rgba(124, 92, 230, 0.24);
+  --gold: #d7c9ff;
+  --green: #58b981;
+  --green-soft: #8ddcaf;
+  --rose: #ef8a83;
+  --border: rgba(124, 92, 230, 0.12);
+  --border-strong: rgba(124, 92, 230, 0.24);
+  --text-muted: rgba(73, 63, 108, 0.58);
+  --text-secondary: rgba(57, 46, 86, 0.84);
+  --shadow-card: 0 26px 70px -38px rgba(84, 67, 148, 0.28);
+  --shadow-float: 0 18px 42px -24px rgba(84, 67, 148, 0.26);
 }
 
 @theme inline {
@@ -54,12 +54,27 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(ellipse 900px 600px at 15% 5%, rgba(200, 149, 108, 0.06) 0%, transparent 70%),
-    radial-gradient(ellipse 700px 500px at 85% 10%, rgba(120, 184, 144, 0.04) 0%, transparent 60%),
-    radial-gradient(ellipse 600px 400px at 50% 90%, rgba(245, 201, 122, 0.03) 0%, transparent 60%);
+    radial-gradient(
+      ellipse 980px 620px at 10% 0%,
+      rgba(174, 153, 255, 0.34) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 760px 540px at 92% 8%,
+      rgba(138, 220, 176, 0.22) 0%,
+      transparent 62%
+    ),
+    radial-gradient(
+      ellipse 820px 560px at 50% 100%,
+      rgba(255, 230, 185, 0.24) 0%,
+      transparent 65%
+    );
 }
 
-h1, h2, h3, h4 {
+h1,
+h2,
+h3,
+h4 {
   font-family: var(--font-fraunces);
 }
 
@@ -89,12 +104,13 @@ a {
 .glass-card {
   background: linear-gradient(
     135deg,
-    rgba(30, 25, 20, 0.8) 0%,
-    rgba(26, 22, 18, 0.6) 100%
+    rgba(255, 255, 255, 0.84) 0%,
+    rgba(249, 245, 255, 0.9) 100%
   );
   border: 1px solid var(--border);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .glass-card-hover {
@@ -114,8 +130,12 @@ a {
 
 /* Button styles */
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-soft) 100%);
-  color: #0f0d0a;
+  background: linear-gradient(
+    135deg,
+    var(--accent) 0%,
+    var(--accent-soft) 100%
+  );
+  color: #fffdf9;
   font-weight: 600;
   border-radius: 9999px;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -127,7 +147,11 @@ a {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.15) 0%,
+    transparent 50%
+  );
   opacity: 0;
   transition: opacity 0.25s;
 }
@@ -137,7 +161,7 @@ a {
 }
 
 .btn-primary:hover {
-  box-shadow: 0 8px 24px -6px rgba(200, 149, 108, 0.4);
+  box-shadow: 0 14px 28px -14px rgba(124, 92, 230, 0.52);
   transform: translateY(-1px);
 }
 
@@ -146,7 +170,7 @@ a {
 }
 
 .btn-secondary {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.72);
   border: 1px solid var(--border-strong);
   color: var(--foreground);
   font-weight: 600;
@@ -157,7 +181,7 @@ a {
 .btn-secondary:hover {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(200, 149, 108, 0.05);
+  background: rgba(255, 255, 255, 0.96);
 }
 
 /* Input styling */
@@ -165,7 +189,7 @@ a {
   width: 100%;
   border-radius: 16px;
   border: 1px solid var(--border);
-  background: var(--surface);
+  background: rgba(255, 255, 255, 0.9);
   padding: 12px 16px;
   font-size: 14px;
   color: var(--foreground);
@@ -190,10 +214,18 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  background: rgba(0, 0, 0, 0.7);
+  padding: 12px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  background: rgba(255, 246, 235, 0.78);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+}
+
+@media (min-width: 640px) {
+  .modal-overlay {
+    padding: 24px;
+  }
 }
 
 /* Animations */
@@ -209,13 +241,22 @@ a {
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 @keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 20px -5px var(--accent-glow); }
-  50% { box-shadow: 0 0 40px -5px var(--accent-glow); }
+  0%,
+  100% {
+    box-shadow: 0 0 20px -5px var(--accent-glow);
+  }
+  50% {
+    box-shadow: 0 0 40px -5px var(--accent-glow);
+  }
 }
 
 .animate-fade-in-up {
@@ -251,7 +292,7 @@ a {
 }
 
 .badge-diary {
-  background: rgba(200, 149, 108, 0.12);
+  background: rgba(124, 92, 230, 0.12);
   color: var(--accent);
 }
 
@@ -266,8 +307,20 @@ a {
 }
 
 .badge-album {
-  background: rgba(245, 201, 122, 0.12);
+  background: rgba(215, 201, 255, 0.18);
   color: var(--gold);
+}
+
+@media (max-width: 640px) {
+  .glass-card {
+    box-shadow: 0 18px 40px -26px rgba(84, 67, 148, 0.22);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .glass-card-hover:hover {
+    transform: none;
+  }
 }
 
 /* Stat card number */
@@ -275,7 +328,11 @@ a {
   font-family: var(--font-fraunces);
   font-size: 2rem;
   line-height: 1;
-  background: linear-gradient(135deg, var(--foreground) 30%, var(--accent) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--foreground) 30%,
+    var(--accent) 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

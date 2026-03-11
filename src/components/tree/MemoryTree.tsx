@@ -1,22 +1,43 @@
 "use client";
 
-import { hierarchy, tree } from "d3-hierarchy";
-import { useMemo, useState } from "react";
-import type { MemoryRecord } from "@/lib/types";
+import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import type { MemoryParticipant, MemoryRecord } from "@/lib/types";
+import { getMediaPublicUrl, getPrimaryMedia } from "@/lib/media";
+import { getParticipantAppearance } from "@/lib/memberAppearance";
+import { useTreeStore } from "@/lib/stores/treeStore";
+import { useUiStore } from "@/lib/stores/uiStore";
+import { deleteMemory } from "@/lib/actions";
 import TreeBranch from "./TreeBranch";
 import TreeNode from "./TreeNode";
 import TreeParticles from "./TreeParticles";
-import type { MemoryNode, PositionedNode, TreeBranch as Branch } from "./types";
+import MemoryMediaDisplay from "../memory/MemoryMediaDisplay";
+import {
+  TREE_NODE_SIZES,
+  type MemoryNode,
+  type PositionedNode,
+  type TreeBranch as Branch,
+} from "./types";
 
-const shortDateFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
+const CANVAS_WIDTH = 420;
+const CENTER_X = CANVAS_WIDTH / 2;
+
+const shortDateFormatter = new Intl.DateTimeFormat("vi-VN", {
   day: "2-digit",
+  month: "short",
 });
 
-const longDateFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
+const longDateFormatter = new Intl.DateTimeFormat("vi-VN", {
   day: "2-digit",
+  month: "short",
   year: "numeric",
+});
+
+const createdAtFormatter = new Intl.DateTimeFormat("vi-VN", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
 });
 
 const toSafeDate = (value?: string | null) => {
@@ -30,12 +51,17 @@ const getMemoryDate = (memory: MemoryRecord) =>
 
 const formatShortDate = (memory: MemoryRecord) => {
   const date = getMemoryDate(memory);
-  return date ? shortDateFormatter.format(date) : "Unknown";
+  return date ? shortDateFormatter.format(date) : "?";
 };
 
 const formatLongDate = (memory: MemoryRecord) => {
   const date = getMemoryDate(memory);
-  return date ? longDateFormatter.format(date) : "Unknown";
+  return date ? longDateFormatter.format(date) : "?";
+};
+
+const formatCreatedAt = (memory: MemoryRecord) => {
+  const date = toSafeDate(memory.created_at);
+  return date ? createdAtFormatter.format(date) : "?";
 };
 
 const formatYear = (memory: MemoryRecord) => {
@@ -44,18 +70,19 @@ const formatYear = (memory: MemoryRecord) => {
 };
 
 const compareMemories = (a?: MemoryRecord, b?: MemoryRecord) => {
-  const aTime = a ? getMemoryDate(a)?.getTime() ?? 0 : 0;
-  const bTime = b ? getMemoryDate(b)?.getTime() ?? 0 : 0;
+  const aTime = a ? (getMemoryDate(a)?.getTime() ?? 0) : 0;
+  const bTime = b ? (getMemoryDate(b)?.getTime() ?? 0) : 0;
   return aTime - bTime;
 };
 
 const buildTree = (memories: MemoryRecord[]): MemoryNode => {
   const root: MemoryNode = {
     id: "root",
-    title: "Kỷ niệm",
+    title: "🌳",
     type: "album",
-    date: "Tất cả",
+    date: "",
     children: [],
+    kind: "root",
   };
 
   if (!memories.length) {
@@ -70,6 +97,7 @@ const buildTree = (memories: MemoryRecord[]): MemoryNode => {
       type: memory.type,
       date: formatShortDate(memory),
       memory,
+      kind: "memory",
     });
   });
 
@@ -82,8 +110,9 @@ const buildTree = (memories: MemoryRecord[]): MemoryNode => {
         id: `year-${year}`,
         title: year,
         type: "album",
-        date: "Year",
+        date: "",
         children: [],
+        kind: "year",
       });
     }
 
@@ -105,7 +134,7 @@ const buildTree = (memories: MemoryRecord[]): MemoryNode => {
 
   yearBuckets.forEach((bucket) => {
     if (bucket.children?.length) {
-      bucket.children.sort((a, b) => compareMemories(a.memory, b.memory));
+      bucket.children.sort((a, b) => compareMemories(b.memory, a.memory));
     }
   });
 
@@ -113,116 +142,407 @@ const buildTree = (memories: MemoryRecord[]): MemoryNode => {
     const aNum = Number(a.title);
     const bNum = Number(b.title);
     if (Number.isNaN(aNum) || Number.isNaN(bNum)) {
-      return a.title.localeCompare(b.title);
+      return b.title.localeCompare(a.title);
     }
-    return aNum - bNum;
+    return bNum - aNum;
   });
 
   root.children = sortedYears;
   return root;
 };
 
-export default function MemoryTree({ memories }: { memories: MemoryRecord[] }) {
-  const width = 980;
-  const height = 620;
-  const offsetX = 70;
-  const offsetY = 90;
-
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+export default function MemoryTree({
+  memories,
+  participants = [],
+  participantsByUserId,
+  isTwoPerson = false,
+}: {
+  memories: MemoryRecord[];
+  participants?: MemoryParticipant[];
+  participantsByUserId?: Map<string, MemoryParticipant>;
+  isTwoPerson?: boolean;
+}) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const selectedId = useTreeStore((s) => s.selectedId);
+  const setSelectedId = useTreeStore((s) => s.setSelectedId);
+  const toggleSelectedId = useTreeStore((s) => s.toggleSelectedId);
+  const openCreate = useTreeStore((s) => s.openCreate);
+  const setEditingMemory = useTreeStore((s) => s.setEditingMemory);
+  const isDetailOpen = useTreeStore((s) => s.isDetailOpen);
+  const setIsDetailOpen = useTreeStore((s) => s.setIsDetailOpen);
+  const addToast = useUiStore((s) => s.addToast);
+  const [isDeleting, startDeleteTransition] = useTransition();
 
   const treeData = useMemo(() => buildTree(memories), [memories]);
 
-  const { nodes, branches, trunk } = useMemo(() => {
-    const layout = tree<MemoryNode>()
-      .size([width - offsetX * 2, height - offsetY * 2])
-      .separation((a, b) => (a.parent === b.parent ? 1.1 : 1.6));
+  const { nodes, branches, trunk, height } = useMemo(() => {
+    const positioned: PositionedNode[] = [];
+    const mappedBranches: Branch[] = [];
+    let cursorY = 100;
 
-    const root = hierarchy(treeData);
-    layout(root);
+    const getAnchor = (node: PositionedNode, role: "source" | "target") => {
+      const size = TREE_NODE_SIZES[node.kind ?? "memory"];
 
-    const positioned: PositionedNode[] = root.descendants().map((node) => {
-      const x = (node.x ?? 0) + offsetX;
-      const y = height - ((node.y ?? 0) + offsetY);
+      if (
+        node.kind === "root" ||
+        node.kind === "year" ||
+        node.side === "center"
+      ) {
+        return {
+          x: node.x,
+          y:
+            role === "source"
+              ? node.y + size.height / 2 - 4
+              : node.y - size.height / 2 + 4,
+        };
+      }
+
+      const sideMultiplier = node.side === "left" ? 1 : -1;
+      const edgeX = node.x + sideMultiplier * (size.width / 2 - 12);
+
       return {
-        ...node.data,
-        x,
-        y,
-        depth: node.depth,
-        hasChildren: Boolean(node.children?.length),
+        x: edgeX,
+        y: role === "source" ? node.y + size.height / 2 - 12 : node.y - 6,
       };
-    });
+    };
 
-    const nodeMap = new Map(positioned.map((node) => [node.id, node]));
+    const trunkNode: PositionedNode = {
+      ...treeData,
+      x: CENTER_X,
+      y: 40,
+      depth: 0,
+      hasChildren: Boolean(treeData.children?.length),
+      side: "center",
+      ownerId: null,
+      kind: "root",
+    };
 
-    const mappedBranches: Branch[] = root.links().map((link) => {
-      const source = nodeMap.get(link.source.data.id)!;
-      const target = nodeMap.get(link.target.data.id)!;
-      const midY = (source.y + target.y) / 2;
-      const path = `M ${source.x},${source.y} C ${source.x},${midY} ${
-        target.x
-      },${midY} ${target.x},${target.y}`;
-      return {
+    positioned.push(trunkNode);
+
+    const addBranch = (source: PositionedNode, target: PositionedNode) => {
+      const start = getAnchor(source, "source");
+      const end = getAnchor(target, "target");
+      const controlX1 = start.x + (end.x - start.x) * 0.24;
+      const controlY1 = start.y + Math.max(24, (end.y - start.y) * 0.38);
+      const controlX2 = end.x - (end.x - start.x) * 0.24;
+      const controlY2 = end.y - Math.max(18, (end.y - start.y) * 0.28);
+
+      mappedBranches.push({
         id: `${source.id}-${target.id}`,
-        path,
         depth: target.depth,
+        path: `M ${start.x},${start.y} C ${controlX1},${controlY1} ${controlX2},${controlY2} ${end.x},${end.y}`,
+      });
+    };
+
+    const placeChildren = (
+      parent: PositionedNode,
+      children: MemoryNode[] | undefined,
+      depth: number,
+      seed: number,
+    ) => {
+      if (!children?.length) return;
+
+      children.forEach((child, index) => {
+        const side =
+          parent.side === "center"
+            ? (index + seed) % 2 === 0
+              ? "left"
+              : "right"
+            : parent.side;
+        const xOffset = Math.min(132, 104 + Math.max(0, depth - 1) * 18);
+        cursorY += depth === 2 ? 92 : 84;
+
+        const childNode: PositionedNode = {
+          ...child,
+          x: CENTER_X + (side === "left" ? -xOffset : xOffset),
+          y: cursorY,
+          depth,
+          hasChildren: Boolean(child.children?.length),
+          side,
+          ownerId: child.memory?.user_id ?? null,
+          kind: "memory",
+        };
+
+        positioned.push(childNode);
+        addBranch(parent, childNode);
+        placeChildren(childNode, child.children, depth + 1, seed + index + 1);
+        cursorY += 8;
+      });
+    };
+
+    (treeData.children ?? []).forEach((group, index) => {
+      const groupNode: PositionedNode = {
+        ...group,
+        x: CENTER_X,
+        y: cursorY,
+        depth: 1,
+        hasChildren: Boolean(group.children?.length),
+        side: "center",
+        ownerId: null,
+        kind: "year",
       };
+
+      positioned.push(groupNode);
+      placeChildren(groupNode, group.children, 2, index);
+      cursorY += 74;
     });
 
     return {
       nodes: positioned,
       branches: mappedBranches,
-      trunk: positioned[0],
+      trunk: trunkNode,
+      height: Math.max(500, cursorY + 96),
     };
-  }, [height, offsetX, offsetY, treeData, width]);
+  }, [treeData]);
+
+  const nodesById = useMemo(
+    () => new Map(nodes.map((node) => [node.id, node] as const)),
+    [nodes],
+  );
+  const resolvedParticipantsByUserId = useMemo(
+    () =>
+      participantsByUserId ??
+      new Map(
+        participants.map(
+          (participant) => [participant.userId, participant] as const,
+        ),
+      ),
+    [participants, participantsByUserId],
+  );
 
   const selectedNode = useMemo(() => {
     if (!selectedId) return null;
-    return nodes.find((node) => node.id === selectedId) ?? null;
-  }, [nodes, selectedId]);
+    return nodesById.get(selectedId) ?? null;
+  }, [nodesById, selectedId]);
 
   const selectedMemory = selectedNode?.memory ?? null;
+  const selectedParticipant = selectedMemory
+    ? resolvedParticipantsByUserId.get(selectedMemory.user_id)
+    : undefined;
+  const selectedAppearance = selectedParticipant
+    ? getParticipantAppearance(selectedParticipant)
+    : null;
+  const primaryMedia = selectedMemory
+    ? getPrimaryMedia(selectedMemory.media)
+    : null;
+  const primaryMediaUrl = primaryMedia
+    ? getMediaPublicUrl(primaryMedia.storage_path)
+    : null;
+
+  const handleDownload = () => {
+    if (!svgRef.current) return;
+
+    const serialized = new XMLSerializer().serializeToString(svgRef.current);
+    const svgBlob = new Blob(
+      [`<?xml version="1.0" encoding="UTF-8"?>${serialized}`],
+      {
+        type: "image/svg+xml;charset=utf-8",
+      },
+    );
+    const objectUrl = window.URL.createObjectURL(svgBlob);
+    const image = new window.Image();
+
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = CANVAS_WIDTH * 2;
+      canvas.height = height * 2;
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        const fallbackLink = document.createElement("a");
+        fallbackLink.href = objectUrl;
+        fallbackLink.download = `memory-tree-${new Date().toISOString().slice(0, 10)}.svg`;
+        fallbackLink.click();
+        window.URL.revokeObjectURL(objectUrl);
+        addToast("Đã tải cây xuống 🌿", "success");
+        return;
+      }
+
+      context.fillStyle = "#f6f0e7";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+      const pngUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = pngUrl;
+      link.download = `memory-tree-${new Date().toISOString().slice(0, 10)}.png`;
+      link.click();
+      window.URL.revokeObjectURL(objectUrl);
+      addToast("Đã lưu ảnh cây 🌸", "success");
+    };
+
+    image.onerror = () => {
+      const fallbackLink = document.createElement("a");
+      fallbackLink.href = objectUrl;
+      fallbackLink.download = `memory-tree-${new Date().toISOString().slice(0, 10)}.svg`;
+      fallbackLink.click();
+      window.URL.revokeObjectURL(objectUrl);
+      addToast("Đã tải cây xuống 🌿", "success");
+    };
+
+    image.src = objectUrl;
+  };
+
+  const handleSelectNode = useCallback(
+    (nodeId: string) => {
+      const node = nodesById.get(nodeId);
+      if (node?.memory && isTwoPerson) {
+        // In 2-person rooms, show popup directly
+        setSelectedId(nodeId);
+        setIsDetailOpen(true);
+      } else {
+        // Toggle selection, show popup on click
+        if (selectedId === nodeId) {
+          setIsDetailOpen(true);
+        } else {
+          setIsDetailOpen(false);
+          toggleSelectedId(nodeId);
+        }
+      }
+    },
+    [toggleSelectedId, setSelectedId, nodesById, isTwoPerson, selectedId],
+  );
+
+  const handleDelete = (memoryId: string) => {
+    if (!confirm("Bạn có chắc muốn xóa kỉ niệm này?")) return;
+    startDeleteTransition(async () => {
+      const result = await deleteMemory(memoryId);
+      if (result.error) {
+        addToast(result.error, "error");
+      } else {
+        addToast("Đã xóa kỉ niệm 🍂", "success");
+        setIsDetailOpen(false);
+        setSelectedId(null);
+      }
+    });
+  };
+
+  const handleEdit = (memory: MemoryRecord) => {
+    setIsDetailOpen(false);
+    setEditingMemory(memory);
+  };
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] font-bold uppercase tracking-[0.35em] text-text-muted">
-          Memory Tree
-        </p>
-        <p className="text-[11px] font-medium text-text-secondary">
-          {memories.length} kỷ niệm
-        </p>
+      <style>{`
+        @keyframes drawBranch {
+          from { stroke-dashoffset: 300; }
+          to { stroke-dashoffset: 0; }
+        }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(16px) scale(0.92); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-4px); }
+        }
+        @keyframes pulse-ring {
+          0% { r: 18; opacity: 0.6; }
+          100% { r: 30; opacity: 0; }
+        }
+        .mem-node { cursor: pointer; transition: transform 0.2s ease; }
+        .mem-node:hover { transform: scale(1.04); }
+        .mem-node:hover .node-title { fill: #3d2d1a; }
+        .floating { animation: float 3s ease-in-out infinite; }
+      `}</style>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          {participants.length > 0 ? (
+            <div className="flex -space-x-1.5">
+              {participants.slice(0, 4).map((participant) => {
+                const appearance = getParticipantAppearance(participant);
+                return (
+                  <div
+                    key={participant.userId}
+                    className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white text-[7px] font-bold"
+                    style={{ backgroundColor: appearance.softColor, color: appearance.strongColor }}
+                    title={participant.displayName}
+                  >
+                    {appearance.initials.slice(0, 2)}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+          <span className="text-[10px] text-text-muted">
+            {memories.length} 🌿
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={handleDownload}
+          className="rounded-full border border-border bg-white/75 p-2 text-text-secondary transition hover:border-accent hover:text-accent"
+          title="Tải ảnh cây"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+        </button>
       </div>
-      
-      <div className="w-full overflow-x-auto pb-4 scrollbar-hide -mx-6 px-6 md:mx-0 md:px-0">
+
+      <div className="mt-2 rounded-2xl bg-[linear-gradient(180deg,#fffdfa_0%,#f8f2ea_100%)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] sm:rounded-[30px] sm:p-3">
         <svg
-          viewBox={`0 0 ${width} ${height}`}
-          className="mt-6 h-auto min-w-[760px] w-full drop-shadow-[0_0_15px_rgba(200,149,108,0.15)]"
+          ref={svgRef}
+          viewBox={`0 0 ${CANVAS_WIDTH} ${height}`}
+          className="block h-auto w-full drop-shadow-[0_24px_42px_rgba(95,79,161,0.14)]"
           role="img"
           aria-label="Memory tree"
+          preserveAspectRatio="xMidYMin meet"
         >
           <defs>
             <linearGradient id="branchGradient" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#c8956c" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#7a553a" stopOpacity="0.3" />
+              <stop offset="0%" stopColor="#b6a1ff" stopOpacity="0.95" />
+              <stop offset="100%" stopColor="#7c5ce6" stopOpacity="0.58" />
             </linearGradient>
-            <filter id="leafGlow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
-              <feColorMatrix
-                in="blur"
-                type="matrix"
-                values="0 0 0 0 0.96  0 0 0 0 0.79  0 0 0 0 0.48  0 0 0 0.6 0"
-              />
-            </filter>
+            <radialGradient id="treeSky" cx="50%" cy="35%" r="70%">
+              <stop offset="0%" stopColor="#fffefb" />
+              <stop offset="100%" stopColor="#f3ede4" />
+            </radialGradient>
+            <linearGradient id="rootGradient" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0%" stopColor="#7c5ce6" />
+              <stop offset="100%" stopColor="#a693ff" />
+            </linearGradient>
           </defs>
 
-          <path
-            d={`M ${trunk?.x ?? 0},${height - 10} L ${trunk?.x ?? 0},${trunk?.y ?? 0}`}
+          <rect
+            x="0"
+            y="0"
+            width={CANVAS_WIDTH}
+            height={height}
+            rx="42"
+            fill="url(#treeSky)"
+          />
+
+          {/* Decorative flowers at bottom */}
+          <g opacity="0.4">
+            {/* Grass & flowers at base */}
+            <ellipse cx={CENTER_X} cy={height - 48} rx="150" ry="28" fill="rgba(136, 216, 171, 0.25)" />
+            {/* Small flowers scattered */}
+            <text x={CENTER_X - 120} y={height - 70} fontSize="16" opacity="0.6">🌸</text>
+            <text x={CENTER_X + 90} y={height - 80} fontSize="14" opacity="0.5">🌼</text>
+            <text x={CENTER_X - 60} y={height - 55} fontSize="12" opacity="0.5">✿</text>
+            <text x={CENTER_X + 40} y={height - 62} fontSize="10" opacity="0.4">🌷</text>
+            <text x={CENTER_X - 140} y={height - 90} fontSize="11" opacity="0.35">🍃</text>
+            <text x={CENTER_X + 130} y={height - 95} fontSize="11" opacity="0.35">🍃</text>
+            {/* Top decoration */}
+            <text x={CENTER_X - 100} y={60} fontSize="12" opacity="0.3">🦋</text>
+            <text x={CENTER_X + 110} y={50} fontSize="10" opacity="0.25">🌸</text>
+          </g>
+
+          <line
+            x1={CENTER_X}
+            y1={(trunk?.y ?? 0) + TREE_NODE_SIZES.root.height / 2}
+            x2={CENTER_X}
+            y2={height - 86}
             stroke="url(#branchGradient)"
             strokeWidth={6}
             strokeLinecap="round"
           />
 
-          <TreeParticles width={width} height={height} />
+          <TreeParticles width={CANVAS_WIDTH} height={height} />
 
           <g>
             {branches.map((branch, index) => (
@@ -237,75 +557,173 @@ export default function MemoryTree({ memories }: { memories: MemoryRecord[] }) {
                 node={node}
                 index={index}
                 isSelected={selectedId === node.id}
-                onSelect={(next) => {
-                  setSelectedId((current) =>
-                    current === next.id ? null : next.id
-                  );
-                }}
+                onSelect={handleSelectNode}
+                participant={
+                  node.ownerId
+                    ? resolvedParticipantsByUserId.get(node.ownerId)
+                    : undefined
+                }
               />
             ))}
           </g>
 
-          <g filter="url(#leafGlow)">
-            <circle cx={(trunk?.x ?? 0) - 120} cy={height - 120} r={6} fill="#f5c97a" />
-            <circle cx={(trunk?.x ?? 0) + 140} cy={height - 160} r={5} fill="#e8a968" />
-            <circle cx={(trunk?.x ?? 0) - 40} cy={height - 200} r={4} fill="#ebd1a4" />
+          {/* Decorative scattered dots */}
+          <g opacity={0.6}>
+            <circle cx={CENTER_X - 138} cy={height - 212} r={5} fill="#c9bafc" />
+            <circle cx={CENTER_X + 124} cy={height - 286} r={5} fill="#88d8ab" />
+            <circle cx={CENTER_X - 48} cy={height - 328} r={4} fill="#ef8a83" />
+            <circle cx={CENTER_X + 160} cy={height - 180} r={3.5} fill="#f0c76b" />
+            <circle cx={CENTER_X - 155} cy={height - 150} r={3} fill="#d772b3" />
           </g>
         </svg>
       </div>
 
-      <div className="glass-card mt-8 rounded-3xl p-6 shadow-[var(--shadow-float)]">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-[10px] uppercase font-bold tracking-[0.3em] text-accent">
-              {selectedMemory ? "Kỷ niệm đang chọn" : "Chi tiết"}
-            </p>
-            <h3 className="mt-2 text-2xl text-foreground">
-              {selectedMemory
-                ? selectedMemory.title
-                : "Chọn một nút trên cây"}
-            </h3>
+      {/* Detail Popup - shown on click (immediately for 2-person rooms) */}
+      {isDetailOpen && selectedMemory ? (
+        <div
+          className="modal-overlay z-[60]"
+          onClick={() => setIsDetailOpen(false)}
+        >
+          <div
+            className="glass-card max-h-[88vh] w-full max-w-lg overflow-hidden rounded-2xl sm:rounded-[30px]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {/* Popup Header */}
+            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-lg">🌿</span>
+                <h3 className="truncate text-base font-semibold text-foreground sm:text-lg">
+                  {selectedMemory.title}
+                </h3>
+              </div>
+              <div className="flex items-center gap-1">
+                {/* Edit */}
+                <button
+                  type="button"
+                  onClick={() => handleEdit(selectedMemory)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-accent hover:text-accent"
+                  title="Sửa"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </button>
+                {/* Delete */}
+                <button
+                  type="button"
+                  onClick={() => handleDelete(selectedMemory.id)}
+                  disabled={isDeleting}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-rose hover:text-rose disabled:opacity-50"
+                  title="Xóa"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+                {/* Close */}
+                <button
+                  type="button"
+                  onClick={() => setIsDetailOpen(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-accent hover:text-accent"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Popup Body */}
+            <div className="max-h-[calc(88vh-56px)] overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
+              {/* Meta info row */}
+              <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-text-secondary">
+                  🗓 {formatLongDate(selectedMemory)}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-text-muted">
+                  🕐 Tạo: {formatCreatedAt(selectedMemory)}
+                </span>
+                {selectedMemory.category && !selectedMemory.room_id ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-green">
+                    ✿ {selectedMemory.category}
+                  </span>
+                ) : null}
+                {selectedMemory.location ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-blue-500">
+                    📍 {selectedMemory.location}
+                  </span>
+                ) : null}
+              </div>
+
+              {/* Author */}
+              {selectedAppearance ? (
+                <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border bg-white/80 px-2.5 py-1 text-[11px] text-text-secondary">
+                  <div
+                    className="flex h-5 w-5 items-center justify-center rounded-full text-[7px] font-bold"
+                    style={{ backgroundColor: selectedAppearance.softColor, color: selectedAppearance.strongColor }}
+                  >
+                    {selectedAppearance.initials.slice(0, 2)}
+                  </div>
+                  <span>{selectedAppearance.displayName}</span>
+                </div>
+              ) : null}
+
+              {/* Media Carousel */}
+              <MemoryMediaDisplay media={selectedMemory.media || []} />
+
+              {/* Content */}
+              <div className="mt-3 rounded-xl border border-border/50 bg-white/70 p-3 text-sm leading-relaxed text-text-secondary">
+                {selectedMemory.content || (
+                  <span className="italic text-text-muted">Chưa có nội dung 🌸</span>
+                )}
+              </div>
+            </div>
           </div>
-          {selectedId ? (
+        </div>
+      ) : null}
+
+      {/* When a memory is selected but popup isn't open, show a small floating bar */}
+      {selectedMemory && !isDetailOpen ? (
+        <div className="sticky bottom-20 z-30 mt-3 flex items-center justify-between gap-2 rounded-2xl border border-border bg-white/92 px-3 py-2 shadow-lg backdrop-blur-sm">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-sm">🌿</span>
+            <span className="truncate text-xs font-semibold text-foreground">{selectedMemory.title}</span>
+          </div>
+          <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setSelectedId(null)}
-              className="rounded-full border border-border px-4 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-text-secondary transition hover:border-accent hover:text-accent"
+              onClick={() => setIsDetailOpen(true)}
+              className="rounded-full bg-accent px-3 py-1.5 text-[10px] font-semibold text-white"
             >
-              Bỏ chọn
+              Xem ✿
             </button>
-          ) : null}
+            <button
+              type="button"
+              onClick={() => handleEdit(selectedMemory)}
+              className="rounded-full border border-border px-2 py-1.5 text-[10px] font-semibold text-text-secondary hover:border-accent hover:text-accent"
+              title="Sửa"
+            >
+              ✏️
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDelete(selectedMemory.id)}
+              disabled={isDeleting}
+              className="rounded-full border border-border px-2 py-1.5 text-[10px] font-semibold text-text-secondary hover:border-rose hover:text-rose disabled:opacity-50"
+              title="Xóa"
+            >
+              🗑
+            </button>
+            <button
+              type="button"
+              onClick={() => { setSelectedId(null); }}
+              className="rounded-full border border-border px-2 py-1.5 text-[10px] font-semibold text-text-muted"
+            >
+              ✕
+            </button>
+          </div>
         </div>
-
-        {selectedMemory ? (
-          <div className="mt-5 grid gap-4 text-sm text-text-secondary">
-            <div className="flex gap-4">
-              <p>
-                <span className="font-semibold text-text-muted mr-2">Loại:</span>
-                <span className="text-accent">{selectedMemory.type}</span>
-              </p>
-              <p>
-                <span className="font-semibold text-text-muted mr-2">Ngày:</span>
-                <span className="text-foreground">{formatLongDate(selectedMemory)}</span>
-              </p>
-            </div>
-            <p className="rounded-2xl bg-surface-2 p-4 leading-relaxed border border-border/50">
-              {selectedMemory.content || "Kỷ niệm chưa có nội dung văn bản."}
-            </p>
-          </div>
-        ) : selectedNode ? (
-          <div className="mt-4 text-sm text-text-secondary rounded-2xl bg-surface-2 p-4">
-            <p>
-              Nút này đại diện cho nhóm: <span className="font-bold text-foreground">{selectedNode.title}</span>.
-              Bên trong chứa {selectedNode.children?.length ?? 0} kỷ niệm.
-            </p>
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-text-muted">
-            Chạm vào một nút bất kỳ trên cây để xem chi tiết khoảnh khắc đã được lưu giữ.
-          </p>
-        )}
-      </div>
+      ) : null}
     </div>
   );
 }

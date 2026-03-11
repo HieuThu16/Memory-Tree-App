@@ -7,8 +7,10 @@ export type MemoryRecord = {
   parent_id: string | null;
   title: string;
   content: string | null;
+  category: string | null;
   date: string | null;
   type: MemoryType;
+  location: string | null;
   position_x: number | null;
   position_y: number | null;
   created_at: string;
@@ -49,11 +51,20 @@ export type ProfileRecord = {
   updated_at: string;
 };
 
+export type MemoryParticipant = {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  role?: "owner" | "member";
+};
+
 export type CreateMemoryInput = {
   title: string;
   content?: string;
+  category?: string;
   type: MemoryType;
   date?: string;
+  location?: string | null;
   room_id?: string | null;
   parent_id?: string | null;
 };

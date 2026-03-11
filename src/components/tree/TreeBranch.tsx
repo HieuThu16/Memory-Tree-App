@@ -1,21 +1,34 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { memo, useEffect, useRef, useState } from "react";
 import type { TreeBranch } from "./types";
 
-export default function TreeBranch({ branch, index }: { branch: TreeBranch; index: number }) {
-  const reduceMotion = useReducedMotion();
+function TreeBranchPath({ branch, index }: { branch: TreeBranch; index: number }) {
+  const pathRef = useRef<SVGPathElement>(null);
+  const [length, setLength] = useState(0);
+
+  useEffect(() => {
+    if (pathRef.current) {
+      setLength(pathRef.current.getTotalLength());
+    }
+  }, [branch.path]);
 
   return (
-    <motion.path
+    <path
+      ref={pathRef}
       d={branch.path}
       fill="none"
       stroke="url(#branchGradient)"
-      strokeWidth={2.2}
+      strokeWidth={2.5}
       strokeLinecap="round"
-      initial={reduceMotion ? undefined : { pathLength: 0, opacity: 0 }}
-      animate={reduceMotion ? undefined : { pathLength: 1, opacity: 1 }}
-      transition={{ duration: 0.9, delay: index * 0.05 + branch.depth * 0.08 }}
+      opacity={0.75}
+      style={{
+        strokeDasharray: length || 300,
+        strokeDashoffset: length ? length : 300,
+        animation: `drawBranch 0.7s ease forwards ${index * 0.1 + 0.2}s`,
+      }}
     />
   );
 }
+
+export default memo(TreeBranchPath);

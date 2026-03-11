@@ -29,7 +29,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f0d0a",
+  themeColor: "#fff8ef",
 };
 
 export default function RootLayout({
@@ -38,9 +38,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi">
+    <html lang="vi" suppressHydrationWarning>
       <body
         className={`${spaceGrotesk.variable} ${fraunces.variable} antialiased`}
+        suppressHydrationWarning
       >
         <QueryProvider>
           {children}

@@ -1,23 +1,40 @@
-import type { RoomRecord } from "@/lib/types";
+import type { MemoryParticipant, RoomRecord } from "@/lib/types";
 import { createSupabaseServerClient } from "../server";
 
+type RoomMemberProfile = { display_name: string | null };
+type RoomParticipantProfile = {
+  display_name: string | null;
+  avatar_url: string | null;
+};
+
 export async function getUserRooms(): Promise<
-  (RoomRecord & { member_count: number; other_members: string[] })[]
+  (RoomRecord & {
+    member_count: number;
+    other_members: string[];
+    shared_member_count: number;
+    is_shared: boolean;
+    invite_only: boolean;
+  })[]
 > {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: memberships, error: memberError } = await supabase
-    .from("room_members")
-    .select("room_id");
-
-  if (memberError || !memberships?.length || !user) {
+  if (!user) {
     return [];
   }
 
-  const roomIds = memberships.map((m) => m.room_id);
+  const { data: memberships, error: memberError } = await supabase
+    .from("room_members")
+    .select("room_id")
+    .eq("user_id", user.id);
+
+  if (memberError || !memberships?.length) {
+    return [];
+  }
+
+  const roomIds = [...new Set(memberships.map((m) => m.room_id))];
 
   const { data: rooms, error: roomError } = await supabase
     .from("rooms")
@@ -34,31 +51,47 @@ export async function getUserRooms(): Promise<
     (rooms ?? []).map(async (room) => {
       const { data: membersInfo } = await supabase
         .from("room_members")
-        .select(`
+        .select(
+          `
           user_id,
-          profiles:user_id(display_name)
-        `)
+          profiles(display_name)
+        `,
+        )
         .eq("room_id", room.id);
 
       const count = membersInfo?.length ?? 0;
-      
+
       const otherMembers = (membersInfo ?? [])
         .filter((m) => m.user_id !== user.id)
         .map((m) => {
-          // Type casting necessary since PostgREST can return an object or array of objects
-          const prof = m.profiles as any;
-          return prof?.display_name || "Khách ẩn danh";
+          const prof = m.profiles as
+            | RoomMemberProfile
+            | RoomMemberProfile[]
+            | null;
+          const resolvedProfile = Array.isArray(prof) ? prof[0] : prof;
+          return resolvedProfile?.display_name || "Khách ẩn danh";
         });
 
-      return { ...room, member_count: count, other_members: otherMembers };
-    })
+      const sharedMemberCount = (membersInfo ?? []).filter(
+        (member) => member.user_id !== room.created_by,
+      ).length;
+
+      return {
+        ...room,
+        member_count: count,
+        other_members: otherMembers,
+        shared_member_count: sharedMemberCount,
+        is_shared: sharedMemberCount > 0,
+        invite_only: sharedMemberCount === 0,
+      };
+    }),
   );
 
   return results;
 }
 
 export async function getRoomByInviteCode(
-  code: string
+  code: string,
 ): Promise<RoomRecord | null> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
@@ -90,7 +123,44 @@ export async function getCurrentUser() {
   return {
     id: user.id,
     email: user.email ?? "",
-    displayName: profile?.display_name ?? user.user_metadata?.full_name ?? "Memory Keeper",
+    displayName:
+      profile?.display_name ?? user.user_metadata?.full_name ?? "Memory Keeper",
     avatarUrl: profile?.avatar_url ?? user.user_metadata?.avatar_url ?? null,
   };
+}
+
+export async function getRoomParticipants(
+  roomId: string,
+): Promise<MemoryParticipant[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("room_members")
+    .select(
+      `
+        user_id,
+        role,
+        profiles(display_name, avatar_url)
+      `,
+    )
+    .eq("room_id", roomId);
+
+  if (error) {
+    console.error("Failed to load room participants", error.message);
+    return [];
+  }
+
+  return (data ?? []).map((member) => {
+    const rawProfile = member.profiles as
+      | RoomParticipantProfile
+      | RoomParticipantProfile[]
+      | null;
+    const profile = Array.isArray(rawProfile) ? rawProfile[0] : rawProfile;
+
+    return {
+      userId: member.user_id,
+      displayName: profile?.display_name || "Thành viên",
+      avatarUrl: profile?.avatar_url || null,
+      role: member.role,
+    };
+  });
 }

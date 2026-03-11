@@ -55,7 +55,7 @@ export default function MediaUploader({
       setFiles((prev) => [...prev, ...newFiles]);
       setIsProcessing(false);
     },
-    [setFiles]
+    [setFiles],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -104,7 +104,7 @@ export default function MediaUploader({
       </div>
 
       {files.length > 0 && (
-        <div className="mt-4 grid grid-cols-4 gap-3">
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {files.map((f) => (
             <div
               key={f.id}

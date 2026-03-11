@@ -2,7 +2,7 @@ import type { CreateMemoryInput, MemoryRecord } from "@/lib/types";
 import { createSupabaseServerClient } from "../server";
 
 const memorySelect =
-  "id, user_id, room_id, parent_id, title, content, date, type, position_x, position_y, created_at";
+  "id, user_id, room_id, parent_id, title, content, category, location, date, type, position_x, position_y, created_at, media(id, memory_id, storage_path, media_type, thumbnail, duration, created_at)";
 
 export async function getPersonalMemories(): Promise<MemoryRecord[]> {
   const supabase = await createSupabaseServerClient();
@@ -20,13 +20,11 @@ export async function getPersonalMemories(): Promise<MemoryRecord[]> {
   return data ?? [];
 }
 
-export async function getMemoryById(
-  id: string
-): Promise<MemoryRecord | null> {
+export async function getMemoryById(id: string): Promise<MemoryRecord | null> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("memories")
-    .select(`${memorySelect}, media(id, memory_id, storage_path, media_type, thumbnail, duration, created_at)`)
+    .select(memorySelect)
     .eq("id", id)
     .single();
 
@@ -38,9 +36,7 @@ export async function getMemoryById(
   return data ?? null;
 }
 
-export async function getRoomMemories(
-  roomId: string
-): Promise<MemoryRecord[]> {
+export async function getRoomMemories(roomId: string): Promise<MemoryRecord[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("memories")

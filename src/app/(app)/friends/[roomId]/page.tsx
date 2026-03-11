@@ -1,12 +1,15 @@
 import { notFound } from "next/navigation";
-import { getCurrentUser } from "@/lib/supabase/queries/rooms";
+import {
+  getCurrentUser,
+  getRoomParticipants,
+} from "@/lib/supabase/queries/rooms";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getRoomMemories } from "@/lib/supabase/queries/memories";
-import MemoryTree from "@/components/tree/MemoryTree";
-import MemoryList from "@/components/memory/MemoryList";
 import RealtimeRoomProvider from "@/components/realtime/RealtimeRoomProvider";
 import LiveCursor from "@/components/realtime/LiveCursor";
 import PresenceAvatars from "@/components/realtime/PresenceAvatars";
+import Link from "next/link";
+import InviteLinkButton from "@/components/room/InviteLinkButton";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +28,6 @@ export default async function RoomPage({
 
   const supabase = await createSupabaseServerClient();
 
-  // Verify membership
   const { data: member, error: memberError } = await supabase
     .from("room_members")
     .select("role")
@@ -37,7 +39,6 @@ export default async function RoomPage({
     return notFound();
   }
 
-  // Get room details
   const { data: room, error: roomError } = await supabase
     .from("rooms")
     .select("*")
@@ -48,38 +49,57 @@ export default async function RoomPage({
     return notFound();
   }
 
-  const memories = await getRoomMemories(roomId);
+  const [memories, participants] = await Promise.all([
+    getRoomMemories(roomId),
+    getRoomParticipants(roomId),
+  ]);
 
   return (
     <>
       <RealtimeRoomProvider roomId={roomId} user={user} />
       <LiveCursor />
 
-      <main className="px-6 pb-24 pt-8">
-        <section className="mx-auto flex w-full max-w-6xl flex-col gap-8">
-          <header className="flex flex-col gap-4 animate-fade-in-up">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-text-muted">
-                  Khu vườn chung
-                </p>
-                <h1 className="mt-2 text-3xl text-foreground md:text-4xl">
-                  {room.name || "Khu vườn chưa đặt tên"}
+      <main className="px-3 pb-24 pt-3 sm:px-6 sm:pt-4">
+        <section className="mx-auto flex w-full max-w-5xl flex-col gap-3 sm:gap-4">
+          {/* Compact inline header */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Link
+                href="/friends"
+                prefetch={true}
+                className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-border bg-white/80 text-text-secondary transition hover:border-accent hover:text-accent"
+                title="Quay lại"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </Link>
+              <div className="min-w-0">
+                <h1 className="truncate text-sm font-semibold text-foreground sm:text-base">
+                  🌿 {room.name || "Khu vườn chung"}
                 </h1>
-                <p className="mt-2 font-mono text-sm tracking-[0.2em] text-accent">
-                  Mã mời: {room.invite_code}
-                </p>
+                <div className="flex items-center gap-1.5 text-[9px] text-text-muted">
+                  <span className="font-mono tracking-wider">{room.invite_code}</span>
+                  <span>•</span>
+                  <span>{participants.length} 👥</span>
+                </div>
               </div>
-              <PresenceAvatars />
             </div>
-          </header>
+            <div className="flex items-center gap-1">
+              <PresenceAvatars />
+              <InviteLinkButton inviteCode={room.invite_code} />
+            </div>
+          </div>
 
-          <RoomClientSection memories={memories} roomId={roomId} />
+          <RoomClientSection
+            memories={memories}
+            roomId={roomId}
+            participants={participants}
+          />
         </section>
       </main>
     </>
   );
 }
 
-// Extract interactive parts to a client component
 import RoomClientSection from "./RoomClientSection";

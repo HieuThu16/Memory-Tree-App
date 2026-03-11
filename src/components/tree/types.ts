@@ -7,6 +7,7 @@ export type MemoryNode = {
   date: string;
   children?: MemoryNode[];
   memory?: MemoryRecord;
+  kind?: "root" | "year" | "memory";
 };
 
 export type PositionedNode = MemoryNode & {
@@ -14,6 +15,8 @@ export type PositionedNode = MemoryNode & {
   y: number;
   depth: number;
   hasChildren: boolean;
+  side?: "left" | "right" | "center";
+  ownerId?: string | null;
 };
 
 export type TreeBranch = {
@@ -21,3 +24,10 @@ export type TreeBranch = {
   path: string;
   depth: number;
 };
+
+export const TREE_NODE_SIZES = {
+  root: { width: 36, height: 36 },
+  year: { width: 86, height: 34 },
+  memory: { width: 168, height: 92 },
+} as const;
+
