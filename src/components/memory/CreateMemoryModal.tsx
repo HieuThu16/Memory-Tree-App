@@ -31,7 +31,8 @@ const categoryIcons: Record<string, string> = {
 };
 
 export default function CreateMemoryModal() {
-  const { isCreateOpen, closeCreate, targetRoomId, editingMemory } = useTreeStore();
+  const { isCreateOpen, closeCreate, targetRoomId, editingMemory } =
+    useTreeStore();
   const addToast = useUiStore((s) => s.addToast);
   const isPersonalMemory = !targetRoomId;
   const isEditing = !!editingMemory;
@@ -45,12 +46,17 @@ export default function CreateMemoryModal() {
   const [isPending, startTransition] = useTransition();
 
   const getMediaUrl = (path: string) => {
-    return createSupabaseBrowserClient().storage.from("media").getPublicUrl(path).data.publicUrl;
+    return createSupabaseBrowserClient()
+      .storage.from("media")
+      .getPublicUrl(path).data.publicUrl;
   };
 
-  const handleDeleteExistingMedia = async (mediaId: string, storagePath: string) => {
+  const handleDeleteExistingMedia = async (
+    mediaId: string,
+    storagePath: string,
+  ) => {
     if (!confirm("Bỏ ảnh/video này khỏi kỉ niệm?")) return;
-    
+
     startTransition(async () => {
       const res = await deleteMedia(mediaId, storagePath);
       if (res.error) {
@@ -59,10 +65,10 @@ export default function CreateMemoryModal() {
         addToast("Đã xóa ảnh 🗑️", "success");
         // Update editing memory locally to reflect deletion
         if (editingMemory && editingMemory.media) {
-          const newMedia = editingMemory.media.filter(m => m.id !== mediaId);
+          const newMedia = editingMemory.media.filter((m) => m.id !== mediaId);
           useTreeStore.getState().setEditingMemory({
             ...editingMemory,
-            media: newMedia
+            media: newMedia,
           });
         }
       }
@@ -76,12 +82,14 @@ export default function CreateMemoryModal() {
       setContent(editingMemory.content || "");
       setCategory(editingMemory.category || "");
       setLocation(editingMemory.location || "");
-      
+
       let initialDate = new Date().toISOString().slice(0, 10);
       if (editingMemory.date) {
         initialDate = new Date(editingMemory.date).toISOString().slice(0, 10);
       } else if (editingMemory.created_at) {
-        initialDate = new Date(editingMemory.created_at).toISOString().slice(0, 10);
+        initialDate = new Date(editingMemory.created_at)
+          .toISOString()
+          .slice(0, 10);
       }
       setDate(initialDate);
     } else if (!isCreateOpen) {
@@ -382,31 +390,61 @@ export default function CreateMemoryModal() {
               </div>
 
               {/* Existing Media Display */}
-              {isEditing && editingMemory && editingMemory.media && editingMemory.media.length > 0 && (
-                 <div className="mt-3">
-                   <label className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted mb-1.5">
-                     🖼️ Ảnh / Video hiện tại
-                   </label>
-                   <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                     {editingMemory.media.map(media => (
-                        <div key={media.id} className="relative flex-none aspect-square w-20 rounded-xl overflow-hidden border border-border bg-black/5">
+              {isEditing &&
+                editingMemory &&
+                editingMemory.media &&
+                editingMemory.media.length > 0 && (
+                  <div className="mt-3">
+                    <label className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted mb-1.5">
+                      🖼️ Ảnh / Video hiện tại
+                    </label>
+                    <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                      {editingMemory.media.map((media) => (
+                        <div
+                          key={media.id}
+                          className="relative flex-none aspect-[4/5] w-24 rounded-xl overflow-hidden border border-border bg-black/5"
+                        >
                           {media.media_type === "video" ? (
-                            <video src={getMediaUrl(media.storage_path)} className="w-full h-full object-cover" />
+                            <video
+                              src={getMediaUrl(media.storage_path)}
+                              className="w-full h-full object-contain p-1"
+                            />
                           ) : (
-                            <img src={getMediaUrl(media.storage_path)} className="w-full h-full object-cover" alt="" />
+                            <img
+                              src={getMediaUrl(media.storage_path)}
+                              className="w-full h-full object-contain p-1"
+                              alt=""
+                            />
                           )}
                           <button
                             type="button"
-                            onClick={() => handleDeleteExistingMedia(media.id, media.storage_path)}
+                            onClick={() =>
+                              handleDeleteExistingMedia(
+                                media.id,
+                                media.storage_path,
+                              )
+                            }
                             className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/50 text-white flex justify-center items-center backdrop-blur hover:bg-rose/80"
                           >
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            <svg
+                              width="10"
+                              height="10"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <line x1="18" y1="6" x2="6" y2="18"></line>
+                              <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
                           </button>
                         </div>
-                     ))}
-                   </div>
-                 </div>
-              )}
+                      ))}
+                    </div>
+                  </div>
+                )}
 
               {/* Media Upload */}
               <div className="mt-3">
@@ -426,7 +464,11 @@ export default function CreateMemoryModal() {
                   {isPending && (
                     <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-surface border-t-white"></span>
                   )}
-                  {isPending ? "Đang lưu..." : isEditing ? "Cập nhật 🌿" : "Lưu kỉ niệm 🌿"}
+                  {isPending
+                    ? "Đang lưu..."
+                    : isEditing
+                      ? "Cập nhật 🌿"
+                      : "Lưu kỉ niệm 🌿"}
                 </button>
                 <button
                   type="button"

@@ -47,14 +47,34 @@ const tabs = [
       </svg>
     ),
   },
+  {
+    href: "/location",
+    label: "Bản đồ",
+    emoji: "🗺️",
+    icon: (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="12" cy="10" r="3" />
+        <path d="M12 2a8 8 0 0 0-8 8c0 5.4 7.05 12.5 7.37 12.81a.9.9 0 0 0 1.26 0C13 22.5 20 15.4 20 10a8 8 0 0 0-8-8z" />
+      </svg>
+    ),
+  },
 ];
 
 export default function TabNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-2 z-40 mx-auto w-[min(320px,calc(100vw-1rem))]">
-      <div className="mx-auto grid grid-cols-2 gap-0.5 rounded-2xl border border-white/60 bg-white/92 p-1 shadow-[0_14px_32px_-20px_rgba(71,54,126,0.36)] backdrop-blur-md">
+    <nav className="fixed inset-x-0 bottom-2 z-40 mx-auto w-[min(380px,calc(100vw-1rem))]">
+      <div className="mx-auto grid grid-cols-3 gap-0.5 rounded-2xl border border-white/60 bg-white/92 p-1 shadow-[0_14px_32px_-20px_rgba(71,54,126,0.36)] backdrop-blur-md">
         {tabs.map((tab) => {
           const isActive =
             tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);

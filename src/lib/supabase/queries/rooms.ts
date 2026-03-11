@@ -1,11 +1,36 @@
 import type { MemoryParticipant, RoomRecord } from "@/lib/types";
 import { createSupabaseServerClient } from "../server";
 
-type RoomMemberProfile = { display_name: string | null };
-type RoomParticipantProfile = {
+type ProfileLookupRecord = {
+  id: string;
   display_name: string | null;
   avatar_url: string | null;
 };
+
+async function getProfilesByIds(
+  userIds: string[],
+): Promise<Map<string, ProfileLookupRecord>> {
+  if (!userIds.length) {
+    return new Map();
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, display_name, avatar_url")
+    .in("id", userIds);
+
+  if (error) {
+    console.error("Failed to load profiles", error.message);
+    return new Map();
+  }
+
+  return new Map(
+    ((data ?? []) as ProfileLookupRecord[]).map(
+      (profile) => [profile.id, profile] as const,
+    ),
+  );
+}
 
 export async function getUserRooms(): Promise<
   (RoomRecord & {
@@ -51,25 +76,18 @@ export async function getUserRooms(): Promise<
     (rooms ?? []).map(async (room) => {
       const { data: membersInfo } = await supabase
         .from("room_members")
-        .select(
-          `
-          user_id,
-          profiles(display_name)
-        `,
-        )
+        .select("user_id")
         .eq("room_id", room.id);
+
+      const memberUserIds = (membersInfo ?? []).map((member) => member.user_id);
+      const profilesById = await getProfilesByIds(memberUserIds);
 
       const count = membersInfo?.length ?? 0;
 
       const otherMembers = (membersInfo ?? [])
         .filter((m) => m.user_id !== user.id)
         .map((m) => {
-          const prof = m.profiles as
-            | RoomMemberProfile
-            | RoomMemberProfile[]
-            | null;
-          const resolvedProfile = Array.isArray(prof) ? prof[0] : prof;
-          return resolvedProfile?.display_name || "Khách ẩn danh";
+          return profilesById.get(m.user_id)?.display_name || "Khách ẩn danh";
         });
 
       const sharedMemberCount = (membersInfo ?? []).filter(
@@ -135,13 +153,7 @@ export async function getRoomParticipants(
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("room_members")
-    .select(
-      `
-        user_id,
-        role,
-        profiles(display_name, avatar_url)
-      `,
-    )
+    .select("user_id, role")
     .eq("room_id", roomId);
 
   if (error) {
@@ -149,12 +161,12 @@ export async function getRoomParticipants(
     return [];
   }
 
+  const profilesById = await getProfilesByIds(
+    (data ?? []).map((member) => member.user_id),
+  );
+
   return (data ?? []).map((member) => {
-    const rawProfile = member.profiles as
-      | RoomParticipantProfile
-      | RoomParticipantProfile[]
-      | null;
-    const profile = Array.isArray(rawProfile) ? rawProfile[0] : rawProfile;
+    const profile = profilesById.get(member.user_id);
 
     return {
       userId: member.user_id,
@@ -163,4 +175,81 @@ export async function getRoomParticipants(
       role: member.role,
     };
   });
+}
+
+/**
+ * Lấy danh sách bạn bè của một user (những người cùng chung ít nhất 1 phòng)
+ */
+export async function getUserFriends(userId: string): Promise<MemoryParticipant[]> {
+  const supabase = await createSupabaseServerClient();
+  
+  // Lấy các phòng mà user đang tham gia
+  const { data: memberships, error: memberError } = await supabase
+    .from("room_members")
+    .select("room_id")
+    .eq("user_id", userId);
+
+  if (memberError || !memberships?.length) return [];
+
+  const roomIds = memberships.map((m) => m.room_id);
+
+  // Lấy các thành viên khác trong các phòng đó
+  const { data: friendsData, error: friendsError } = await supabase
+    .from("room_members")
+    .select("user_id, role")
+    .in("room_id", roomIds)
+    .neq("user_id", userId);
+
+  if (friendsError || !friendsData?.length) return [];
+  
+  // Lọc trùng lặp user_id (trường hợp cùng chung nhiều phòng)
+  const uniqueFriendsMap = new Map();
+  for (const f of friendsData) {
+    if (!uniqueFriendsMap.has(f.user_id)) {
+      uniqueFriendsMap.set(f.user_id, f);
+    }
+  }
+  const uniqueFriends = Array.from(uniqueFriendsMap.values());
+
+  const profilesById = await getProfilesByIds(
+    uniqueFriends.map((f) => f.user_id)
+  );
+
+  return uniqueFriends.map((friend) => {
+    const profile = profilesById.get(friend.user_id);
+    return {
+      userId: friend.user_id,
+      displayName: profile?.display_name || "Thành viên",
+      avatarUrl: profile?.avatar_url || null,
+      role: friend.role,
+    };
+  });
+}
+
+/**
+ * Kiểm tra xem 2 user có phải là bạn bè không (bằng cách check xem có chung room_id nào không)
+ */
+export async function checkAreFriends(userId1: string, userId2: string): Promise<boolean> {
+  if (userId1 === userId2) return false;
+  const supabase = await createSupabaseServerClient();
+  
+  // Lấy danh sách room của người 1
+  const { data, error } = await supabase
+    .from("room_members")
+    .select("room_id")
+    .eq("user_id", userId1);
+    
+  if (error || !data || data.length === 0) return false;
+  
+  const roomIds = data.map(m => m.room_id);
+  
+  // Xem người 2 có nằm trong bất kỳ room nào của người 1 không
+  const { data: sharedRooms, error: sharedError } = await supabase
+    .from("room_members")
+    .select("room_id")
+    .eq("user_id", userId2)
+    .in("room_id", roomIds)
+    .limit(1);
+    
+  return !sharedError && sharedRooms && sharedRooms.length > 0;
 }

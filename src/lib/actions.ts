@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import type { CreateMemoryInput } from "@/lib/types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -134,17 +135,16 @@ export async function deleteMedia(mediaId: string, storagePath: string) {
 
   // Verify memory belongs to user before deleting its media
   // or maybe it's too complex, let's just use media table RLS, but for safe we delete from storage then db
-  const { error: storageError } = await supabase.storage.from("media").remove([storagePath]);
-  
+  const { error: storageError } = await supabase.storage
+    .from("media")
+    .remove([storagePath]);
+
   if (storageError) {
     console.error("Failed to delete from storage", storageError);
     // Ignore storage deletion errors to proceed with db cleanup
   }
 
-  const { error } = await supabase
-    .from("media")
-    .delete()
-    .eq("id", mediaId);
+  const { error } = await supabase.from("media").delete().eq("id", mediaId);
 
   if (error) {
     return { error: error.message };
@@ -221,6 +221,10 @@ export async function joinRoom(inviteCode: string) {
       return { error: joinError.message };
     }
 
+    if (joinError.message.includes("đủ 2 người")) {
+      return { error: "Khu vườn này đã đủ 2 người." };
+    }
+
     return { error: "Mã mời phòng không tồn tại hoặc không hợp lệ." };
   }
 
@@ -238,53 +242,42 @@ export async function joinRoom(inviteCode: string) {
     return { error: "Không thể tải thông tin phòng sau khi tham gia." };
   }
 
-  type RoomInfoRecord = {
-    name: string | null;
-    created_by: string | null;
-    room_members: {
-      user_id: string;
-      profiles:
-        | { display_name: string | null }
-        | { display_name: string | null }[]
-        | null;
-    }[];
-  };
-
-  // Get room and other members to show a nice notification
   const { data: roomInfo } = await supabase
     .from("rooms")
-    .select(
-      `
-      name,
-      created_by,
-      room_members (
-        user_id,
-        profiles (
-          display_name
-        )
-      )
-    `,
-    )
+    .select("name, created_by")
     .eq("id", room.id)
     .single();
 
+  const { data: roomMembers } = await supabase
+    .from("room_members")
+    .select("user_id")
+    .eq("room_id", room.id);
+
+  const memberUserIds = (roomMembers ?? []).map((member) => member.user_id);
+  let profiles: { id: string; display_name: string | null }[] = [];
+
+  if (memberUserIds.length) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", memberUserIds);
+
+    profiles = (data ?? []) as { id: string; display_name: string | null }[];
+  }
+
+  const profilesById = new Map(
+    profiles.map((profile) => [profile.id, profile] as const),
+  );
+
   let message = "Đã kết nối vào khu vườn chung!";
 
-  const typedRoomInfo = roomInfo as RoomInfoRecord | null;
-
-  if (typedRoomInfo && typedRoomInfo.room_members) {
-    const collaborators = typedRoomInfo.room_members
-      .filter((member) => member.user_id !== typedRoomInfo.created_by)
-      .map((member) => {
-        const profile = Array.isArray(member.profiles)
-          ? member.profiles[0]
-          : member.profiles;
-
-        return {
-          user_id: member.user_id,
-          display_name: profile?.display_name || "Khách",
-        };
-      });
+  if (roomInfo && roomMembers) {
+    const collaborators = roomMembers
+      .filter((member) => member.user_id !== roomInfo.created_by)
+      .map((member) => ({
+        user_id: member.user_id,
+        display_name: profilesById.get(member.user_id)?.display_name || "Khách",
+      }));
 
     const otherMembers = collaborators
       .filter((member) => member.user_id !== user.id)
@@ -299,7 +292,7 @@ export async function joinRoom(inviteCode: string) {
     } else if (otherMembers.length > 0) {
       message = `Kết nối thành công! Bạn đang chung vườn với: ${otherMembers.join(", ")}`;
     } else {
-      message = `Đã tham gia khu vườn "${typedRoomInfo.name || "mới"}" thành công!`;
+      message = `Đã tham gia khu vườn "${roomInfo.name || "mới"}" thành công!`;
     }
   }
 
@@ -409,5 +402,5 @@ export async function signOut() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
+  redirect("/login");
 }
-

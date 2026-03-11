@@ -5,15 +5,18 @@ import MemoryTree from "@/components/tree/MemoryTree";
 import MemoryGallery from "@/components/memory/MemoryGallery";
 import type { MemoryParticipant, MemoryRecord } from "@/lib/types";
 import { useTreeStore } from "@/lib/stores/treeStore";
+import ConnectedUsersBanner from "@/components/realtime/ConnectedUsersBanner";
 
 export default function RoomClientSection({
   memories,
   roomId,
   participants,
+  currentUserId,
 }: {
   memories: MemoryRecord[];
   roomId: string;
   participants: MemoryParticipant[];
+  currentUserId: string;
 }) {
   const openCreate = useTreeStore((s) => s.openCreate);
   const participantsByUserId = useMemo(
@@ -27,6 +30,13 @@ export default function RoomClientSection({
   );
 
   const isTwoPerson = participants.length === 2;
+  const friendParticipant = useMemo(
+    () =>
+      participants.find(
+        (participant) => participant.userId !== currentUserId,
+      ) ?? null,
+    [currentUserId, participants],
+  );
   const [viewMode, setViewMode] = useState<"tree" | "gallery">("tree");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -36,7 +46,7 @@ export default function RoomClientSection({
     return memories.filter(
       (m) =>
         m.title.toLowerCase().includes(lowerQ) ||
-        (m.category && m.category.toLowerCase().includes(lowerQ))
+        (m.category && m.category.toLowerCase().includes(lowerQ)),
     );
   }, [memories, searchQuery]);
 
@@ -45,13 +55,37 @@ export default function RoomClientSection({
       <div className="flex flex-col gap-3">
         {/* Top Header Controls */}
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <span className="rounded-full bg-accent px-3 py-1.5 text-[10px] font-semibold text-white shadow-[0_12px_24px_-16px_rgba(108,76,215,0.9)]">
-              👥 {participants.length}
+              👥 {participants.length}/2
             </span>
             <span className="rounded-full border border-border bg-white/75 px-3 py-1.5 text-[10px] font-semibold text-text-secondary">
               🌸 {filteredMemories.length} / {memories.length}
             </span>
+            {friendParticipant ? (
+              <div className="inline-flex min-w-0 items-center gap-2 rounded-full border border-border bg-white/80 px-2.5 py-1.5 text-[10px] font-semibold text-text-secondary">
+                <div className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border border-white/60 bg-white shadow-sm">
+                  {friendParticipant.avatarUrl ? (
+                    <img
+                      src={friendParticipant.avatarUrl}
+                      alt={friendParticipant.displayName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>
+                      {friendParticipant.displayName.slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <span className="max-w-[110px] truncate">
+                  {friendParticipant.displayName}
+                </span>
+              </div>
+            ) : (
+              <span className="rounded-full border border-dashed border-border bg-white/65 px-3 py-1.5 text-[10px] font-semibold text-text-muted">
+                Chờ thêm 1 người bạn
+              </span>
+            )}
           </div>
           <button
             type="button"
@@ -61,6 +95,13 @@ export default function RoomClientSection({
             + Góp 🌱
           </button>
         </div>
+
+        {/* Connected users presence banner */}
+        <ConnectedUsersBanner
+          participants={participants}
+          currentUserId={currentUserId}
+          roomId={roomId}
+        />
 
         {/* Search & View Mode Toggle */}
         <div className="flex items-center gap-2">

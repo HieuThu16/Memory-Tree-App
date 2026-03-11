@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut } from "@/lib/actions";
+import InstallAppButton from "./InstallAppButton";
 
 type UserInfo = {
   id: string;
@@ -38,17 +39,14 @@ export default function AppHeader({ user }: { user: UserInfo | null }) {
               <span className="hidden text-[10px] text-white/70 sm:inline">
                 {user.displayName}
               </span>
+              <InstallAppButton />
               <button
                 type="button"
                 onClick={() => signOut()}
-                className="rounded-full border border-white/20 bg-white/14 p-1.5 text-white transition hover:bg-white/22"
+                className="rounded-full border border-white/20 bg-white/14 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-white/22"
                 title="Đăng xuất"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                  <polyline points="16 17 21 12 16 7" />
-                  <line x1="21" y1="12" x2="9" y2="12" />
-                </svg>
+                Đăng xuất
               </button>
               <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white/30 bg-white/90 shadow-sm">
                 {user.avatarUrl ? (

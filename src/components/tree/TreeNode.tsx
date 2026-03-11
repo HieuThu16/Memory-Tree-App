@@ -3,8 +3,7 @@
 import { memo, type KeyboardEvent } from "react";
 import type { MemoryParticipant } from "@/lib/types";
 import { getParticipantAppearance } from "@/lib/memberAppearance";
-import { getMediaPublicUrl } from "@/lib/media";
-import { TREE_NODE_SIZES, type PositionedNode } from "./types";
+import type { PositionedNode } from "./types";
 
 /* ─── 5 distinct color variants for the new organic shape ─── */
 type ShapeVariant = "leaf" | "sakura" | "tulip" | "daisy" | "clover";
@@ -13,16 +12,60 @@ const VARIANTS: Record<
   ShapeVariant,
   { bg: string; stroke: string; accent: string; text: string }
 > = {
-  sakura: { bg: "#fff4f6", stroke: "#ef8a83", accent: "#f9b4b0", text: "#c0544e" },
-  leaf: { bg: "#f2fff7", stroke: "#58b981", accent: "#8bd5ae", text: "#3a7d5a" },
-  clover: { bg: "#f7f0ff", stroke: "#8e6df2", accent: "#c9bafc", text: "#5c3dbf" },
-  tulip: { bg: "#fff3fb", stroke: "#d772b3", accent: "#e8a0cf", text: "#9c4080" },
-  daisy: { bg: "#fffef4", stroke: "#e6c84e", accent: "#f0d875", text: "#8a7020" },
+  sakura: {
+    bg: "#fff4f6",
+    stroke: "#ef8a83",
+    accent: "#f9b4b0",
+    text: "#c0544e",
+  },
+  leaf: {
+    bg: "#f2fff7",
+    stroke: "#58b981",
+    accent: "#8bd5ae",
+    text: "#3a7d5a",
+  },
+  clover: {
+    bg: "#f7f0ff",
+    stroke: "#8e6df2",
+    accent: "#c9bafc",
+    text: "#5c3dbf",
+  },
+  tulip: {
+    bg: "#fff3fb",
+    stroke: "#d772b3",
+    accent: "#e8a0cf",
+    text: "#9c4080",
+  },
+  daisy: {
+    bg: "#fffef4",
+    stroke: "#e6c84e",
+    accent: "#f0d875",
+    text: "#8a7020",
+  },
 };
 
-const VARIANT_ORDER: ShapeVariant[] = ["sakura", "leaf", "tulip", "daisy", "clover"];
+const VARIANT_ORDER: ShapeVariant[] = [
+  "sakura",
+  "leaf",
+  "tulip",
+  "daisy",
+  "clover",
+];
 
-const DECORATIVE_ICONS = ["🦋", "🌸", "🌼", "✿", "🌷", "🍃", "✨", "🐝", "🐞", "🌻", "🌺", "💮"];
+const DECORATIVE_ICONS = [
+  "🦋",
+  "🌸",
+  "🌼",
+  "✿",
+  "🌷",
+  "🍃",
+  "✨",
+  "🐝",
+  "🐞",
+  "🌻",
+  "🌺",
+  "💮",
+];
 
 /** Pick random decorations deterministically using the node id hash */
 const getDecorations = (nodeId: string, count: number = 2) => {
@@ -36,7 +79,8 @@ const getDecorations = (nodeId: string, count: number = 2) => {
     return (hash - 1) / 2147483646; // [0, 1)
   };
 
-  rng(); rng(); // mix it up
+  rng();
+  rng(); // mix it up
 
   const decors = [];
   // Use a mix of items
@@ -48,15 +92,19 @@ const getDecorations = (nodeId: string, count: number = 2) => {
     const rx = 57.5;
     const ry = 44;
     // calculate ellipse radius at this angle
-    const ellipseRadius = (rx * ry) / Math.sqrt(Math.pow(ry * Math.cos(angle), 2) + Math.pow(rx * Math.sin(angle), 2));
+    const ellipseRadius =
+      (rx * ry) /
+      Math.sqrt(
+        Math.pow(ry * Math.cos(angle), 2) + Math.pow(rx * Math.sin(angle), 2),
+      );
     // add some distance outside the shape
-    const offset = 8 + rng() * 20; 
+    const offset = 8 + rng() * 20;
     const distance = ellipseRadius + offset;
-    
+
     // Convert to cartesian coordinates
     const sx = Math.cos(angle) * distance;
     const sy = Math.sin(angle) * distance;
-    
+
     const size = 10 + Math.floor(rng() * 8); // 10-18 size
     const delay = rng() * 2.5; // for float offset
     const rotate = rng() * 60 - 30; // -30 to 30 deg
@@ -127,13 +175,18 @@ function TreeNodeView({
       : node.memory.content
     : null;
 
-  const primaryMediaUrl = node.memory?.media?.[0]?.storage_path
-    ? getMediaPublicUrl(node.memory.media[0].storage_path)
+  const primaryMedia = node.memory?.media?.[0] ?? null;
+  const mediaBadge = primaryMedia
+    ? primaryMedia.media_type === "video"
+      ? "🎬"
+      : "📷"
     : null;
 
   // Use the new standard node size
-  const W_NODE = 115, H_NODE = 88;
-  const rx = W_NODE / 2, ry = H_NODE / 2;
+  const W_NODE = 115,
+    H_NODE = 88;
+  const rx = W_NODE / 2,
+    ry = H_NODE / 2;
 
   const handleSelect = () => onSelect?.(node.id);
   const handleKeyDown = (event: KeyboardEvent<SVGGElement>) => {
@@ -147,23 +200,62 @@ function TreeNodeView({
   if (node.kind === "root") {
     return (
       <g>
-        <circle cx={node.x} cy={node.y - 48} r={18} fill="#7c5ce6" stroke="rgba(255,255,255,0.5)" strokeWidth={1.5} />
-        <circle cx={node.x} cy={node.y - 48} r={7} fill="rgba(255,255,255,0.5)" />
+        <circle
+          cx={node.x}
+          cy={node.y - 48}
+          r={18}
+          fill="#7c5ce6"
+          stroke="rgba(255,255,255,0.5)"
+          strokeWidth={1.5}
+        />
+        <circle
+          cx={node.x}
+          cy={node.y - 48}
+          r={7}
+          fill="rgba(255,255,255,0.5)"
+        />
       </g>
     );
   }
 
   if (node.kind === "year") {
     return (
-      <g style={{ animation: `fadeUp 0.4s ease forwards ${index * 0.1}s`, opacity: 0, animationFillMode: "forwards" }}>
-        <rect x={node.x - 54} y={node.y - 18} width={108} height={36} rx={18}
-          fill="#7c5ce6" stroke="rgba(255,255,255,0.5)" strokeWidth={1.5}
+      <g
+        style={{
+          animation: `fadeUp 0.4s ease forwards ${index * 0.1}s`,
+          opacity: 0,
+          animationFillMode: "forwards",
+        }}
+      >
+        <rect
+          x={node.x - 54}
+          y={node.y - 18}
+          width={108}
+          height={36}
+          rx={18}
+          fill="#7c5ce6"
+          stroke="rgba(255,255,255,0.5)"
+          strokeWidth={1.5}
         />
-        <rect x={node.x - 54} y={node.y - 18} width={108} height={18} rx={18}
+        <rect
+          x={node.x - 54}
+          y={node.y - 18}
+          width={108}
+          height={18}
+          rx={18}
           fill="rgba(255,255,255,0.12)"
         />
-        <text x={node.x} y={node.y + 6} textAnchor="middle"
-          style={{ fill: "white", fontSize: 15, fontWeight: 700, fontFamily: "Georgia, serif" }}>
+        <text
+          x={node.x}
+          y={node.y + 6}
+          textAnchor="middle"
+          style={{
+            fill: "white",
+            fontSize: 15,
+            fontWeight: 700,
+            fontFamily: "Georgia, serif",
+          }}
+        >
           {node.title}
         </text>
       </g>
@@ -173,7 +265,7 @@ function TreeNodeView({
   /* ─── Memory node ─── */
   const variantStr = getVariant(node.id);
   const v = VARIANTS[variantStr] || VARIANTS.sakura;
-  
+
   // Single organic blob path centered at 0,0
   const shapePath = `M 0 ${-ry} 
     C ${rx * 0.9} ${-ry * 0.85}, ${rx * 1.05} ${-ry * 0.1}, ${rx * 0.6} ${ry * 0.5}
@@ -197,8 +289,14 @@ function TreeNodeView({
     >
       {/* Pulse ring when selected */}
       {isSelected && (
-        <circle cx={node.x} cy={node.y} r={18} fill="none"
-          stroke={v.stroke} strokeWidth={2} opacity={0.4}
+        <circle
+          cx={node.x}
+          cy={node.y}
+          r={18}
+          fill="none"
+          stroke={v.stroke}
+          strokeWidth={2}
+          opacity={0.4}
           style={{ animation: "pulse-ring 1.2s ease-out infinite" }}
         />
       )}
@@ -206,43 +304,53 @@ function TreeNodeView({
       {/* Group translated to node.x, node.y */}
       <g transform={`translate(${node.x} ${node.y})`}>
         <defs>
-          <filter id={`shadow-${variantStr}-${node.id}`} x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor={v.stroke} floodOpacity={isSelected ? 0.35 : 0.15} />
+          <filter
+            id={`shadow-${variantStr}-${node.id}`}
+            x="-20%"
+            y="-20%"
+            width="140%"
+            height="140%"
+          >
+            <feDropShadow
+              dx="0"
+              dy="3"
+              stdDeviation="4"
+              floodColor={v.stroke}
+              floodOpacity={isSelected ? 0.35 : 0.15}
+            />
           </filter>
-          <clipPath id={`clip-node-${node.id}`}>
-            <path d={shapePath} />
-          </clipPath>
         </defs>
 
         <path
           d={shapePath}
-          fill={primaryMediaUrl ? "#ddd" : v.bg}
+          fill={v.bg}
           stroke={isSelected ? v.text : v.stroke}
           strokeWidth={isSelected ? 2.5 : 1.8}
           filter={`url(#shadow-${variantStr}-${node.id})`}
           style={{ transition: "all 0.25s ease" }}
         />
-        
-        {/* Media background overlay */}
-        {primaryMediaUrl ? (
-          <g clipPath={`url(#clip-node-${node.id})`}>
-            <image
-              href={primaryMediaUrl}
-              x={-rx}
-              y={-ry}
-              width={W_NODE}
-              height={H_NODE}
-              preserveAspectRatio="xMidYMid slice"
-            />
-            {/* White frosted overlay to keep text readable */}
+
+        {/* Stable media badge instead of embedded SVG image fill */}
+        {mediaBadge ? (
+          <g>
             <rect
-              x={-rx}
-              y={-ry}
-              width={W_NODE}
-              height={H_NODE}
-              fill={isSelected ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.68)"}
-              style={{ transition: "fill 0.25s ease" }}
+              x={-rx + 8}
+              y={-ry + 8}
+              width="24"
+              height="20"
+              rx="8"
+              fill="rgba(255,255,255,0.82)"
+              stroke={v.stroke}
+              strokeWidth="1"
             />
+            <text
+              x={-rx + 20}
+              y={-ry + 22}
+              textAnchor="middle"
+              style={{ fontSize: 11, pointerEvents: "none" }}
+            >
+              {mediaBadge}
+            </text>
           </g>
         ) : null}
 
@@ -266,7 +374,13 @@ function TreeNodeView({
           opacity={0.25}
         />
         {/* Decorative dot */}
-        <circle cx={rx * 0.55} cy={-ry * 0.6} r={3} fill={v.accent} opacity={0.7} />
+        <circle
+          cx={rx * 0.55}
+          cy={-ry * 0.6}
+          r={3}
+          fill={v.accent}
+          opacity={0.7}
+        />
 
         {/* Stem from node to branch junction (local coords) */}
         <line
@@ -274,7 +388,10 @@ function TreeNodeView({
           y1={H_NODE * 0.42}
           x2={node.side === "left" ? 24 : -24}
           y2={H_NODE * 0.52}
-          stroke={v.stroke} strokeWidth={1.8} strokeLinecap="round" opacity={0.6}
+          stroke={v.stroke}
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          opacity={0.6}
         />
 
         {/* Decorative random icons around the node */}
@@ -323,7 +440,13 @@ function TreeNodeView({
             x={0}
             y={titleLines.length > 1 ? 16 : 9}
             textAnchor="middle"
-            style={{ fill: "#7a6858", fontSize: 8, fontStyle: "italic", fontFamily: "Georgia, serif", pointerEvents: "none" }}
+            style={{
+              fill: "#7a6858",
+              fontSize: 8,
+              fontStyle: "italic",
+              fontFamily: "Georgia, serif",
+              pointerEvents: "none",
+            }}
           >
             {contentSnippet}
           </text>
@@ -334,7 +457,14 @@ function TreeNodeView({
           x={0}
           y={28}
           textAnchor="middle"
-          style={{ fill: v.text, fontSize: 9, fontWeight: 600, fontFamily: "Georgia, serif", opacity: 0.8, pointerEvents: "none" }}
+          style={{
+            fill: v.text,
+            fontSize: 9,
+            fontWeight: 600,
+            fontFamily: "Georgia, serif",
+            opacity: 0.8,
+            pointerEvents: "none",
+          }}
         >
           {node.date}
         </text>

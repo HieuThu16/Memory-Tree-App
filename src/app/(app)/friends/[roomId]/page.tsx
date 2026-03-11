@@ -54,6 +54,10 @@ export default async function RoomPage({
     getRoomParticipants(roomId),
   ]);
 
+  const friendParticipant = participants.find(
+    (participant) => participant.userId !== user.id,
+  );
+
   return (
     <>
       <RealtimeRoomProvider roomId={roomId} user={user} />
@@ -70,7 +74,16 @@ export default async function RoomPage({
                 className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-border bg-white/80 text-text-secondary transition hover:border-accent hover:text-accent"
                 title="Quay lại"
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <polyline points="15 18 9 12 15 6" />
                 </svg>
               </Link>
@@ -79,10 +92,34 @@ export default async function RoomPage({
                   🌿 {room.name || "Khu vườn chung"}
                 </h1>
                 <div className="flex items-center gap-1.5 text-[9px] text-text-muted">
-                  <span className="font-mono tracking-wider">{room.invite_code}</span>
+                  <span className="font-mono tracking-wider">
+                    {room.invite_code}
+                  </span>
                   <span>•</span>
                   <span>{participants.length} 👥</span>
                 </div>
+                {friendParticipant ? (
+                  <div className="mt-1 flex items-center gap-1.5 text-[10px] text-text-secondary">
+                    <div className="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full border border-white/60 bg-white/80">
+                      {friendParticipant.avatarUrl ? (
+                        <img
+                          src={friendParticipant.avatarUrl}
+                          alt={friendParticipant.displayName}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-[8px] font-semibold">
+                          {friendParticipant.displayName
+                            .slice(0, 1)
+                            .toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <span>
+                      Bạn đang chung vườn với {friendParticipant.displayName}
+                    </span>
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -95,6 +132,7 @@ export default async function RoomPage({
             memories={memories}
             roomId={roomId}
             participants={participants}
+            currentUserId={user.id}
           />
         </section>
       </main>

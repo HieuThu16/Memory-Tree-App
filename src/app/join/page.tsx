@@ -56,7 +56,9 @@ export default async function JoinPage({
 
   const friendlyMessage = joinError?.message.includes("chính khu vườn mình tạo")
     ? joinError.message
-    : null;
+    : joinError?.message.includes("đủ 2 người")
+      ? "Khu vườn này đã đủ 2 người, không thể tham gia thêm."
+      : null;
 
   if (joinError || !roomId) {
     return (

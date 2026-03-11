@@ -5,7 +5,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { MediaRecord } from "@/lib/types";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-export default function MemoryMediaDisplay({ media }: { media: MediaRecord[] }) {
+export default function MemoryMediaDisplay({
+  media,
+}: {
+  media: MediaRecord[];
+}) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const supabase = createSupabaseBrowserClient();
 
@@ -24,7 +28,7 @@ export default function MemoryMediaDisplay({ media }: { media: MediaRecord[] }) 
   // Keyboard navigation
   useEffect(() => {
     if (lightboxIndex === null) return;
-    
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setLightboxIndex(null);
       if (e.key === "ArrowLeft") {
@@ -34,7 +38,7 @@ export default function MemoryMediaDisplay({ media }: { media: MediaRecord[] }) 
         setLightboxIndex((i) => (i === media.length - 1 ? 0 : (i ?? -1) + 1));
       }
     };
-    
+
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [lightboxIndex, media.length]);
@@ -58,12 +62,15 @@ export default function MemoryMediaDisplay({ media }: { media: MediaRecord[] }) 
       <div className={`mt-3 grid gap-2 ${getGridCols()}`}>
         {media.map((item, idx) => {
           const url = getUrl(item.storage_path);
+          const singleItem = media.length === 1;
           return (
             <button
               key={item.id}
               type="button"
-              className={`group relative overflow-hidden rounded-xl border border-border bg-black/5 transition hover:opacity-90 ${
-                media.length === 1 ? "aspect-[4/3] sm:aspect-video w-full" : "aspect-square"
+              className={`group relative overflow-hidden rounded-xl border border-border bg-slate-950/4 transition hover:opacity-90 ${
+                singleItem
+                  ? "aspect-[4/3] sm:aspect-video w-full"
+                  : "aspect-[4/5]"
               }`}
               onClick={() => setLightboxIndex(idx)}
             >
@@ -71,12 +78,19 @@ export default function MemoryMediaDisplay({ media }: { media: MediaRecord[] }) 
                 <div className="h-full w-full">
                   <video
                     src={url}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain p-1.5"
                     preload="metadata"
                   />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/20 transition group-hover:bg-black/40">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 9-14 9z"/></svg>
+                      <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                      >
+                        <path d="M5 3l14 9-14 9z" />
+                      </svg>
                     </div>
                   </div>
                 </div>
@@ -84,7 +98,7 @@ export default function MemoryMediaDisplay({ media }: { media: MediaRecord[] }) 
                 <img
                   src={url}
                   alt={`Media ${idx + 1}`}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain p-1.5"
                 />
               )}
             </button>
@@ -140,11 +154,22 @@ export default function MemoryMediaDisplay({ media }: { media: MediaRecord[] }) 
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setLightboxIndex((i) => (i === 0 ? media.length - 1 : (i ?? 1) - 1));
+                        setLightboxIndex((i) =>
+                          i === 0 ? media.length - 1 : (i ?? 1) - 1,
+                        );
                       }}
                       className="group flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/30 hover:scale-110"
                     >
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <polyline points="15 18 9 12 15 6"></polyline>
                       </svg>
                     </button>
@@ -153,11 +178,22 @@ export default function MemoryMediaDisplay({ media }: { media: MediaRecord[] }) 
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setLightboxIndex((i) => (i === media.length - 1 ? 0 : (i ?? -1) + 1));
+                        setLightboxIndex((i) =>
+                          i === media.length - 1 ? 0 : (i ?? -1) + 1,
+                        );
                       }}
                       className="group flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/30 hover:scale-110"
                     >
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <polyline points="9 18 15 12 9 6"></polyline>
                       </svg>
                     </button>

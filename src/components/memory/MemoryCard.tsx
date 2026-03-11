@@ -66,7 +66,7 @@ export default function MemoryCard({
             <div className="relative">
               <video
                 src={mediaUrl}
-                className="aspect-[4/3] w-full object-cover"
+                className="aspect-[4/3] w-full object-contain bg-slate-950/4 p-1"
                 muted
                 playsInline
                 preload="metadata"
@@ -79,7 +79,7 @@ export default function MemoryCard({
             <img
               src={mediaUrl}
               alt={memory.title}
-              className="aspect-[4/3] w-full object-cover"
+              className="aspect-[4/3] w-full object-contain bg-slate-950/4 p-1"
             />
           )}
         </div>
@@ -94,7 +94,10 @@ export default function MemoryCard({
             {appearance ? (
               <div
                 className="flex h-5 w-5 items-center justify-center rounded-full text-[6px] font-bold"
-                style={{ backgroundColor: appearance.softColor, color: appearance.strongColor }}
+                style={{
+                  backgroundColor: appearance.softColor,
+                  color: appearance.strongColor,
+                }}
                 title={appearance.displayName}
               >
                 {appearance.initials.slice(0, 2)}

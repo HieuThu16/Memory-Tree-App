@@ -34,7 +34,8 @@ export default function MediaUploader({
           try {
             processedFile = await imageCompression(file, {
               maxSizeMB: 2,
-              maxWidthOrHeight: 1920,
+              maxWidthOrHeight: 1600,
+              initialQuality: 0.82,
               useWebWorker: true,
             });
           } catch (error) {
@@ -108,18 +109,18 @@ export default function MediaUploader({
           {files.map((f) => (
             <div
               key={f.id}
-              className="group relative aspect-square overflow-hidden rounded-xl border border-border bg-surface-2"
+              className="group relative aspect-[4/5] overflow-hidden rounded-xl border border-border bg-surface-2"
             >
               {f.file.type.startsWith("image/") ? (
                 <img
                   src={f.previewUrl}
                   alt="preview"
-                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                  className="h-full w-full object-contain p-1.5 transition-transform group-hover:scale-[1.02]"
                 />
               ) : (
                 <video
                   src={f.previewUrl}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain p-1.5"
                   muted
                   playsInline
                 />

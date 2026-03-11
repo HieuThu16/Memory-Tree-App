@@ -1,7 +1,8 @@
 import type { MediaRecord } from "@/lib/types";
+import { getSupabaseConfig } from "@/lib/supabase/config";
 
 export const getMediaPublicUrl = (storagePath: string) => {
-  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const { url: baseUrl } = getSupabaseConfig();
 
   if (!baseUrl) {
     return storagePath;
