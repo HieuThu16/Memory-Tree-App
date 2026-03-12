@@ -84,6 +84,11 @@ export default function MemoryGallery({
               <p className="truncate text-[11px] font-semibold tracking-wide drop-shadow-md">
                 {memory.title}
               </p>
+              {memory.category ? (
+                <p className="mt-0.5 truncate text-[9px] font-medium opacity-90 drop-shadow-md">
+                  ✿ {memory.category}
+                </p>
+              ) : null}
               <p className="text-[9px] font-medium opacity-80 drop-shadow-md">
                 {memory.date
                   ? new Date(memory.date).toLocaleDateString("vi-VN")

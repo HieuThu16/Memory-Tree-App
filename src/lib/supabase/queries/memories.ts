@@ -1,14 +1,12 @@
 import type { CreateMemoryInput, MemoryRecord } from "@/lib/types";
+import { MEMORY_SELECT } from "@/lib/supabase/selects";
 import { createSupabaseServerClient } from "../server";
-
-const memorySelect =
-  "id, user_id, room_id, parent_id, title, content, category, location, date, type, position_x, position_y, created_at, media(id, memory_id, storage_path, media_type, thumbnail, duration, created_at)";
 
 export async function getPersonalMemories(): Promise<MemoryRecord[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("memories")
-    .select(memorySelect)
+    .select(MEMORY_SELECT)
     .is("room_id", null)
     .order("date", { ascending: true });
 
@@ -24,7 +22,7 @@ export async function getMemoryById(id: string): Promise<MemoryRecord | null> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("memories")
-    .select(memorySelect)
+    .select(MEMORY_SELECT)
     .eq("id", id)
     .single();
 
@@ -40,7 +38,7 @@ export async function getRoomMemories(roomId: string): Promise<MemoryRecord[]> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("memories")
-    .select(memorySelect)
+    .select(MEMORY_SELECT)
     .eq("room_id", roomId)
     .order("date", { ascending: true });
 

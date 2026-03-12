@@ -80,8 +80,7 @@ export default async function JoinPage({
                   <span className="font-mono font-semibold text-accent">
                     {inviteCode}
                   </span>{" "}
-                  không tồn tại hoặc chưa được bật chức năng tham gia nhanh
-                  trong database.
+                  không tồn tại hoặc đã hết hiệu lực.
                 </>
               )}
             </p>

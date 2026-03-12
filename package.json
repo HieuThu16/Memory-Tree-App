@@ -7,6 +7,16 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "mobile:install": "npm install --prefix mobile",
+    "mobile:dev": "npm run start --prefix mobile",
+    "mobile:lan": "npm run start:lan --prefix mobile",
+    "mobile:localhost": "npm run start:localhost --prefix mobile",
+    "mobile:tunnel": "npm run start:tunnel --prefix mobile",
+    "mobile:build": "npm run prebuild --prefix mobile",
+    "mobile:android": "npm run android --prefix mobile",
+    "mobile:ios": "npm run ios --prefix mobile",
+    "mobile:web": "npm run web --prefix mobile",
+    "mobile:apk": "npm run apk --prefix mobile",
     "deploy-prod": "vercel deploy --prod --yes --build-env NEXT_PUBLIC_SUPABASE_URL=https://xhgpxtuzocqqqgsdfqig.supabase.co --build-env NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_5EExnaFkAHKHEEcwrHF3tg_adJeIbiW --env NEXT_PUBLIC_SUPABASE_URL=https://xhgpxtuzocqqqgsdfqig.supabase.co --env NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_5EExnaFkAHKHEEcwrHF3tg_adJeIbiW"
   },
   "dependencies": {

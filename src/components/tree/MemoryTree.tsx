@@ -1,12 +1,18 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, useTransition } from "react";
-import type { MemoryParticipant, MemoryRecord } from "@/lib/types";
-import { getMediaPublicUrl, getPrimaryMedia } from "@/lib/media";
+import { useCallback, useEffect, useMemo, useRef, useTransition } from "react";
+import type {
+  MemoryEditHistoryRecord,
+  MemoryParticipant,
+  MemoryRecord,
+} from "@/lib/types";
 import { getParticipantAppearance } from "@/lib/memberAppearance";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useMemoryStore } from "@/lib/stores/memoryStore";
 import { useTreeStore } from "@/lib/stores/treeStore";
 import { useUiStore } from "@/lib/stores/uiStore";
 import { deleteMemory } from "@/lib/actions";
+import MemoryEditHistoryList from "../memory/MemoryEditHistoryList";
 import TreeBranch from "./TreeBranch";
 import TreeNode from "./TreeNode";
 import TreeParticles from "./TreeParticles";
@@ -166,11 +172,13 @@ export default function MemoryTree({
   const selectedId = useTreeStore((s) => s.selectedId);
   const setSelectedId = useTreeStore((s) => s.setSelectedId);
   const toggleSelectedId = useTreeStore((s) => s.toggleSelectedId);
-  const openCreate = useTreeStore((s) => s.openCreate);
   const setEditingMemory = useTreeStore((s) => s.setEditingMemory);
   const isDetailOpen = useTreeStore((s) => s.isDetailOpen);
   const setIsDetailOpen = useTreeStore((s) => s.setIsDetailOpen);
   const addToast = useUiStore((s) => s.addToast);
+  const removeMemory = useMemoryStore((s) => s.removeMemory);
+  const histories = useMemoryStore((s) => s.histories);
+  const setHistory = useMemoryStore((s) => s.setHistory);
   const [isDeleting, startDeleteTransition] = useTransition();
 
   const treeData = useMemo(() => buildTree(memories), [memories]);
@@ -322,12 +330,46 @@ export default function MemoryTree({
   const selectedAppearance = selectedParticipant
     ? getParticipantAppearance(selectedParticipant)
     : null;
-  const primaryMedia = selectedMemory
-    ? getPrimaryMedia(selectedMemory.media)
-    : null;
-  const primaryMediaUrl = primaryMedia
-    ? getMediaPublicUrl(primaryMedia.storage_path)
-    : null;
+  const historyEntries = selectedMemory
+    ? histories[selectedMemory.id]
+    : undefined;
+  const isHistoryLoading =
+    !!selectedMemory &&
+    !Object.prototype.hasOwnProperty.call(histories, selectedMemory.id);
+
+  useEffect(() => {
+    if (!selectedMemory || historyEntries) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadHistory = async () => {
+      const { data, error } = await createSupabaseBrowserClient()
+        .from("memory_edit_history")
+        .select("*")
+        .eq("memory_id", selectedMemory.id)
+        .order("created_at", { ascending: false });
+
+      if (cancelled) {
+        return;
+      }
+
+      if (error) {
+        addToast("Không tải được lịch sử chỉnh sửa.", "error");
+        setHistory(selectedMemory.id, []);
+        return;
+      }
+
+      setHistory(selectedMemory.id, (data ?? []) as MemoryEditHistoryRecord[]);
+    };
+
+    void loadHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [addToast, historyEntries, selectedMemory, setHistory]);
 
   const handleDownload = () => {
     if (!svgRef.current) return;
@@ -400,7 +442,14 @@ export default function MemoryTree({
         }
       }
     },
-    [toggleSelectedId, setSelectedId, nodesById, isTwoPerson, selectedId],
+    [
+      toggleSelectedId,
+      setSelectedId,
+      nodesById,
+      isTwoPerson,
+      selectedId,
+      setIsDetailOpen,
+    ],
   );
 
   const handleDelete = (memoryId: string) => {
@@ -410,6 +459,7 @@ export default function MemoryTree({
       if (result.error) {
         addToast(result.error, "error");
       } else {
+        removeMemory(memoryId);
         addToast("Đã xóa kỉ niệm 🍂", "success");
         setIsDetailOpen(false);
         setSelectedId(null);
@@ -456,7 +506,10 @@ export default function MemoryTree({
                   <div
                     key={participant.userId}
                     className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white text-[7px] font-bold"
-                    style={{ backgroundColor: appearance.softColor, color: appearance.strongColor }}
+                    style={{
+                      backgroundColor: appearance.softColor,
+                      color: appearance.strongColor,
+                    }}
                     title={participant.displayName}
                   >
                     {appearance.initials.slice(0, 2)}
@@ -475,7 +528,16 @@ export default function MemoryTree({
           className="rounded-full border border-border bg-white/75 p-2 text-text-secondary transition hover:border-accent hover:text-accent"
           title="Tải ảnh cây"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
@@ -519,17 +581,54 @@ export default function MemoryTree({
           {/* Decorative flowers at bottom */}
           <g opacity="0.4">
             {/* Grass & flowers at base */}
-            <ellipse cx={CENTER_X} cy={height - 48} rx="150" ry="28" fill="rgba(136, 216, 171, 0.25)" />
+            <ellipse
+              cx={CENTER_X}
+              cy={height - 48}
+              rx="150"
+              ry="28"
+              fill="rgba(136, 216, 171, 0.25)"
+            />
             {/* Small flowers scattered */}
-            <text x={CENTER_X - 120} y={height - 70} fontSize="16" opacity="0.6">🌸</text>
-            <text x={CENTER_X + 90} y={height - 80} fontSize="14" opacity="0.5">🌼</text>
-            <text x={CENTER_X - 60} y={height - 55} fontSize="12" opacity="0.5">✿</text>
-            <text x={CENTER_X + 40} y={height - 62} fontSize="10" opacity="0.4">🌷</text>
-            <text x={CENTER_X - 140} y={height - 90} fontSize="11" opacity="0.35">🍃</text>
-            <text x={CENTER_X + 130} y={height - 95} fontSize="11" opacity="0.35">🍃</text>
+            <text
+              x={CENTER_X - 120}
+              y={height - 70}
+              fontSize="16"
+              opacity="0.6"
+            >
+              🌸
+            </text>
+            <text x={CENTER_X + 90} y={height - 80} fontSize="14" opacity="0.5">
+              🌼
+            </text>
+            <text x={CENTER_X - 60} y={height - 55} fontSize="12" opacity="0.5">
+              ✿
+            </text>
+            <text x={CENTER_X + 40} y={height - 62} fontSize="10" opacity="0.4">
+              🌷
+            </text>
+            <text
+              x={CENTER_X - 140}
+              y={height - 90}
+              fontSize="11"
+              opacity="0.35"
+            >
+              🍃
+            </text>
+            <text
+              x={CENTER_X + 130}
+              y={height - 95}
+              fontSize="11"
+              opacity="0.35"
+            >
+              🍃
+            </text>
             {/* Top decoration */}
-            <text x={CENTER_X - 100} y={60} fontSize="12" opacity="0.3">🦋</text>
-            <text x={CENTER_X + 110} y={50} fontSize="10" opacity="0.25">🌸</text>
+            <text x={CENTER_X - 100} y={60} fontSize="12" opacity="0.3">
+              🦋
+            </text>
+            <text x={CENTER_X + 110} y={50} fontSize="10" opacity="0.25">
+              🌸
+            </text>
           </g>
 
           <line
@@ -569,11 +668,31 @@ export default function MemoryTree({
 
           {/* Decorative scattered dots */}
           <g opacity={0.6}>
-            <circle cx={CENTER_X - 138} cy={height - 212} r={5} fill="#c9bafc" />
-            <circle cx={CENTER_X + 124} cy={height - 286} r={5} fill="#88d8ab" />
+            <circle
+              cx={CENTER_X - 138}
+              cy={height - 212}
+              r={5}
+              fill="#c9bafc"
+            />
+            <circle
+              cx={CENTER_X + 124}
+              cy={height - 286}
+              r={5}
+              fill="#88d8ab"
+            />
             <circle cx={CENTER_X - 48} cy={height - 328} r={4} fill="#ef8a83" />
-            <circle cx={CENTER_X + 160} cy={height - 180} r={3.5} fill="#f0c76b" />
-            <circle cx={CENTER_X - 155} cy={height - 150} r={3} fill="#d772b3" />
+            <circle
+              cx={CENTER_X + 160}
+              cy={height - 180}
+              r={3.5}
+              fill="#f0c76b"
+            />
+            <circle
+              cx={CENTER_X - 155}
+              cy={height - 150}
+              r={3}
+              fill="#d772b3"
+            />
           </g>
         </svg>
       </div>
@@ -604,7 +723,16 @@ export default function MemoryTree({
                   className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-accent hover:text-accent"
                   title="Sửa"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                   </svg>
@@ -617,7 +745,16 @@ export default function MemoryTree({
                   className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-rose hover:text-rose disabled:opacity-50"
                   title="Xóa"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <polyline points="3 6 5 6 21 6" />
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                   </svg>
@@ -660,7 +797,10 @@ export default function MemoryTree({
                 <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border bg-white/80 px-2.5 py-1 text-[11px] text-text-secondary">
                   <div
                     className="flex h-5 w-5 items-center justify-center rounded-full text-[7px] font-bold"
-                    style={{ backgroundColor: selectedAppearance.softColor, color: selectedAppearance.strongColor }}
+                    style={{
+                      backgroundColor: selectedAppearance.softColor,
+                      color: selectedAppearance.strongColor,
+                    }}
                   >
                     {selectedAppearance.initials.slice(0, 2)}
                   </div>
@@ -674,9 +814,23 @@ export default function MemoryTree({
               {/* Content */}
               <div className="mt-3 rounded-xl border border-border/50 bg-white/70 p-3 text-sm leading-relaxed text-text-secondary">
                 {selectedMemory.content || (
-                  <span className="italic text-text-muted">Chưa có nội dung 🌸</span>
+                  <span className="italic text-text-muted">
+                    Chưa có nội dung 🌸
+                  </span>
                 )}
               </div>
+
+              {selectedMemory.room_id ? (
+                <p className="mt-3 text-xs leading-relaxed text-text-muted">
+                  Thành viên trong room này có thể sửa kỉ niệm. Mọi thay đổi đều
+                  được lưu lại bên dưới.
+                </p>
+              ) : null}
+
+              <MemoryEditHistoryList
+                entries={historyEntries ?? []}
+                loading={isHistoryLoading}
+              />
             </div>
           </div>
         </div>
@@ -687,7 +841,9 @@ export default function MemoryTree({
         <div className="sticky bottom-20 z-30 mt-3 flex items-center justify-between gap-2 rounded-2xl border border-border bg-white/92 px-3 py-2 shadow-lg backdrop-blur-sm">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-sm">🌿</span>
-            <span className="truncate text-xs font-semibold text-foreground">{selectedMemory.title}</span>
+            <span className="truncate text-xs font-semibold text-foreground">
+              {selectedMemory.title}
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -716,7 +872,9 @@ export default function MemoryTree({
             </button>
             <button
               type="button"
-              onClick={() => { setSelectedId(null); }}
+              onClick={() => {
+                setSelectedId(null);
+              }}
               className="rounded-full border border-border px-2 py-1.5 text-[10px] font-semibold text-text-muted"
             >
               ✕

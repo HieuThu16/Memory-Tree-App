@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import MemoryTree from "@/components/tree/MemoryTree";
 import MemoryGallery from "@/components/memory/MemoryGallery";
 import type { MemoryRecord } from "@/lib/types";
+import { useMemoryStore } from "@/lib/stores/memoryStore";
 import { useTreeStore } from "@/lib/stores/treeStore";
 
 export default function ClientSection({
@@ -12,18 +13,26 @@ export default function ClientSection({
   memories: MemoryRecord[];
 }) {
   const openCreate = useTreeStore((s) => s.openCreate);
+  const hydrateScope = useMemoryStore((s) => s.hydrateScope);
+  const scopedMemories = useMemoryStore((s) =>
+    s.scopeKey === "personal" ? s.memories : memories,
+  );
   const [viewMode, setViewMode] = useState<"tree" | "gallery">("tree");
   const [searchQuery, setSearchQuery] = useState("");
 
+  useEffect(() => {
+    hydrateScope("personal", memories);
+  }, [hydrateScope, memories]);
+
   const filteredMemories = useMemo(() => {
-    if (!searchQuery.trim()) return memories;
+    if (!searchQuery.trim()) return scopedMemories;
     const lowerQ = searchQuery.toLowerCase();
-    return memories.filter(
+    return scopedMemories.filter(
       (m) =>
         m.title.toLowerCase().includes(lowerQ) ||
-        (m.category && m.category.toLowerCase().includes(lowerQ))
+        (m.category && m.category.toLowerCase().includes(lowerQ)),
     );
-  }, [memories, searchQuery]);
+  }, [scopedMemories, searchQuery]);
 
   return (
     <section className="glass-card overflow-hidden rounded-2xl p-2.5 sm:rounded-[30px] sm:p-4">
@@ -31,7 +40,7 @@ export default function ClientSection({
         {/* Top Controls: Stats & Add */}
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-[10px] font-semibold text-white shadow-[0_12px_24px_-16px_rgba(108,76,215,0.9)]">
-            🌸 {filteredMemories.length} / {memories.length}
+            🌸 {filteredMemories.length} / {scopedMemories.length}
           </span>
           <button
             type="button"

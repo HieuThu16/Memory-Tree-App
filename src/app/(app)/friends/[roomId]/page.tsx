@@ -1,15 +1,18 @@
 import { notFound } from "next/navigation";
 import {
   getCurrentUser,
+  getRoomInviteCode,
   getRoomParticipants,
 } from "@/lib/supabase/queries/rooms";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getRoomMemories } from "@/lib/supabase/queries/memories";
+import { getRoomPlaylists } from "@/lib/supabase/queries/playlists";
 import RealtimeRoomProvider from "@/components/realtime/RealtimeRoomProvider";
 import LiveCursor from "@/components/realtime/LiveCursor";
 import PresenceAvatars from "@/components/realtime/PresenceAvatars";
 import Link from "next/link";
 import InviteLinkButton from "@/components/room/InviteLinkButton";
+import RoomPlaylistManager from "@/components/music/RoomPlaylistManager";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +44,7 @@ export default async function RoomPage({
 
   const { data: room, error: roomError } = await supabase
     .from("rooms")
-    .select("*")
+    .select("id, name, created_by, shared_playlist_url, expires_at, created_at")
     .eq("id", roomId)
     .single();
 
@@ -49,10 +52,16 @@ export default async function RoomPage({
     return notFound();
   }
 
-  const [memories, participants] = await Promise.all([
+  const [memories, participants, playlists] = await Promise.all([
     getRoomMemories(roomId),
     getRoomParticipants(roomId),
+    getRoomPlaylists(roomId),
   ]);
+  const inviteCode = await getRoomInviteCode(roomId);
+  const roomRecord = {
+    ...room,
+    invite_code: inviteCode,
+  };
 
   const friendParticipant = participants.find(
     (participant) => participant.userId !== user.id,
@@ -93,7 +102,7 @@ export default async function RoomPage({
                 </h1>
                 <div className="flex items-center gap-1.5 text-[9px] text-text-muted">
                   <span className="font-mono tracking-wider">
-                    {room.invite_code}
+                    {roomRecord.invite_code ?? "------"}
                   </span>
                   <span>•</span>
                   <span>{participants.length} 👥</span>
@@ -124,9 +133,11 @@ export default async function RoomPage({
             </div>
             <div className="flex items-center gap-1">
               <PresenceAvatars />
-              <InviteLinkButton inviteCode={room.invite_code} />
+              <InviteLinkButton inviteCode={roomRecord.invite_code} />
             </div>
           </div>
+
+          <RoomPlaylistManager roomId={roomId} initialPlaylists={playlists} />
 
           <RoomClientSection
             memories={memories}

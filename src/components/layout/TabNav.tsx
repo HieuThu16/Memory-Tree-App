@@ -48,9 +48,9 @@ const tabs = [
     ),
   },
   {
-    href: "/location",
-    label: "Bản đồ",
-    emoji: "🗺️",
+    href: "/music",
+    label: "Nhạc",
+    emoji: "🎵",
     icon: (
       <svg
         width="16"
@@ -62,8 +62,9 @@ const tabs = [
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <circle cx="12" cy="10" r="3" />
-        <path d="M12 2a8 8 0 0 0-8 8c0 5.4 7.05 12.5 7.37 12.81a.9.9 0 0 0 1.26 0C13 22.5 20 15.4 20 10a8 8 0 0 0-8-8z" />
+        <path d="M9 18V5l12-2v13" />
+        <circle cx="6" cy="18" r="3" />
+        <circle cx="18" cy="16" r="3" />
       </svg>
     ),
   },

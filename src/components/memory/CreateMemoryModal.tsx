@@ -2,6 +2,8 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useTransition } from "react";
+import { MEMORY_SELECT } from "@/lib/supabase/selects";
+import { useMemoryStore } from "@/lib/stores/memoryStore";
 import { useTreeStore } from "@/lib/stores/treeStore";
 import { useUiStore } from "@/lib/stores/uiStore";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -34,6 +36,8 @@ export default function CreateMemoryModal() {
   const { isCreateOpen, closeCreate, targetRoomId, editingMemory } =
     useTreeStore();
   const addToast = useUiStore((s) => s.addToast);
+  const upsertMemory = useMemoryStore((s) => s.upsertMemory);
+  const prependHistory = useMemoryStore((s) => s.prependHistory);
   const isPersonalMemory = !targetRoomId;
   const isEditing = !!editingMemory;
 
@@ -51,6 +55,16 @@ export default function CreateMemoryModal() {
       .getPublicUrl(path).data.publicUrl;
   };
 
+  const fetchLatestMemory = async (memoryId: string) => {
+    const { data } = await createSupabaseBrowserClient()
+      .from("memories")
+      .select(MEMORY_SELECT)
+      .eq("id", memoryId)
+      .single();
+
+    return data ?? null;
+  };
+
   const handleDeleteExistingMedia = async (
     mediaId: string,
     storagePath: string,
@@ -66,6 +80,10 @@ export default function CreateMemoryModal() {
         // Update editing memory locally to reflect deletion
         if (editingMemory && editingMemory.media) {
           const newMedia = editingMemory.media.filter((m) => m.id !== mediaId);
+          upsertMemory({
+            ...editingMemory,
+            media: newMedia,
+          });
           useTreeStore.getState().setEditingMemory({
             ...editingMemory,
             media: newMedia,
@@ -201,6 +219,19 @@ export default function CreateMemoryModal() {
             }
           }
 
+          const latestMemory =
+            files.length > 0
+              ? await fetchLatestMemory(editingMemory.id)
+              : (result.data?.memory ?? null);
+
+          if (latestMemory) {
+            upsertMemory(latestMemory);
+          }
+
+          if (result.data?.historyEntries?.length) {
+            prependHistory(editingMemory.id, result.data.historyEntries);
+          }
+
           addToast("Đã cập nhật 🌿", "success");
           reset();
           closeCreate();
@@ -221,15 +252,27 @@ export default function CreateMemoryModal() {
 
         if (result.error) {
           addToast(result.error, "error");
-        } else if (result.data) {
+        } else if (result.data?.memory) {
           const user = (await createSupabaseBrowserClient().auth.getUser()).data
             .user;
           if (user && files.length > 0) {
-            const uploadResult = await uploadFiles(result.data.id, user.id);
+            const uploadResult = await uploadFiles(
+              result.data.memory.id,
+              user.id,
+            );
             if (!uploadResult.success) {
               addToast(uploadResult.error || "Lỗi tải ảnh/video", "error");
               return; // Stop here, don't close modal
             }
+          }
+
+          const latestMemory =
+            files.length > 0
+              ? await fetchLatestMemory(result.data.memory.id)
+              : result.data.memory;
+
+          if (latestMemory) {
+            upsertMemory(latestMemory);
           }
 
           addToast("Đã lưu kỉ niệm! 🌱", "success");
@@ -424,6 +467,7 @@ export default function CreateMemoryModal() {
                                 media.storage_path,
                               )
                             }
+                            title="Xóa media hiện tại"
                             className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/50 text-white flex justify-center items-center backdrop-blur hover:bg-rose/80"
                           >
                             <svg

@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import MemoryTree from "@/components/tree/MemoryTree";
 import MemoryGallery from "@/components/memory/MemoryGallery";
 import type { MemoryParticipant, MemoryRecord } from "@/lib/types";
+import { useMemoryStore } from "@/lib/stores/memoryStore";
 import { useTreeStore } from "@/lib/stores/treeStore";
 import ConnectedUsersBanner from "@/components/realtime/ConnectedUsersBanner";
 
@@ -19,6 +20,10 @@ export default function RoomClientSection({
   currentUserId: string;
 }) {
   const openCreate = useTreeStore((s) => s.openCreate);
+  const hydrateScope = useMemoryStore((s) => s.hydrateScope);
+  const scopedMemories = useMemoryStore((s) =>
+    s.scopeKey === `room:${roomId}` ? s.memories : memories,
+  );
   const participantsByUserId = useMemo(
     () =>
       new Map(
@@ -40,15 +45,19 @@ export default function RoomClientSection({
   const [viewMode, setViewMode] = useState<"tree" | "gallery">("tree");
   const [searchQuery, setSearchQuery] = useState("");
 
+  useEffect(() => {
+    hydrateScope(`room:${roomId}`, memories);
+  }, [hydrateScope, memories, roomId]);
+
   const filteredMemories = useMemo(() => {
-    if (!searchQuery.trim()) return memories;
+    if (!searchQuery.trim()) return scopedMemories;
     const lowerQ = searchQuery.toLowerCase();
-    return memories.filter(
+    return scopedMemories.filter(
       (m) =>
         m.title.toLowerCase().includes(lowerQ) ||
         (m.category && m.category.toLowerCase().includes(lowerQ)),
     );
-  }, [memories, searchQuery]);
+  }, [scopedMemories, searchQuery]);
 
   return (
     <section className="glass-card overflow-hidden rounded-2xl p-2.5 sm:rounded-[30px] sm:p-4">
@@ -60,7 +69,7 @@ export default function RoomClientSection({
               👥 {participants.length}/2
             </span>
             <span className="rounded-full border border-border bg-white/75 px-3 py-1.5 text-[10px] font-semibold text-text-secondary">
-              🌸 {filteredMemories.length} / {memories.length}
+              🌸 {filteredMemories.length} / {scopedMemories.length}
             </span>
             {friendParticipant ? (
               <div className="inline-flex min-w-0 items-center gap-2 rounded-full border border-border bg-white/80 px-2.5 py-1.5 text-[10px] font-semibold text-text-secondary">

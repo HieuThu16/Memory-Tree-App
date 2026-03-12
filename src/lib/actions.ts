@@ -2,8 +2,124 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { CreateMemoryInput } from "@/lib/types";
+import type {
+  CreateMemoryInput,
+  MemoryEditHistoryRecord,
+  MusicSearchResult,
+  PlaylistRecord,
+  PlaylistTrackRecord,
+  RoomSummary,
+} from "@/lib/types";
+import { MEMORY_SELECT, PLAYLIST_SELECT } from "@/lib/supabase/selects";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+
+const INVITE_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function generateInviteCode(length = 6) {
+  return Array.from(
+    { length },
+    () =>
+      INVITE_CODE_CHARS[Math.floor(Math.random() * INVITE_CODE_CHARS.length)],
+  ).join("");
+}
+
+const memoryFieldLabels: Record<string, string> = {
+  title: "tiêu đề",
+  content: "nội dung",
+  category: "thể loại",
+  location: "địa điểm",
+  date: "ngày",
+  type: "loại",
+};
+
+type MemoryComparableField = keyof typeof memoryFieldLabels;
+
+async function getCurrentUserDisplayName(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  user: {
+    id: string;
+    email?: string | null;
+    user_metadata?: Record<string, unknown>;
+  },
+) {
+  const profileResult = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  return (
+    profileResult.data?.display_name ??
+    (typeof user.user_metadata?.full_name === "string"
+      ? user.user_metadata.full_name
+      : null) ??
+    user.email ??
+    "Một người dùng"
+  );
+}
+
+async function getMemoryForMutation(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  memoryId: string,
+) {
+  const { data, error } = await supabase
+    .from("memories")
+    .select(
+      "id, user_id, room_id, parent_id, title, content, category, location, date, type, created_at",
+    )
+    .eq("id", memoryId)
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return data;
+}
+
+async function canEditMemory(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  userId: string,
+  memory: { user_id: string; room_id: string | null },
+) {
+  if (!memory.room_id) {
+    return memory.user_id === userId;
+  }
+
+  const { data: membership } = await supabase
+    .from("room_members")
+    .select("user_id")
+    .eq("room_id", memory.room_id)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  return Boolean(membership);
+}
+
+async function getFullMemoryRecord(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  memoryId: string,
+) {
+  const { data } = await supabase
+    .from("memories")
+    .select(MEMORY_SELECT)
+    .eq("id", memoryId)
+    .single();
+
+  return data ?? null;
+}
+
+function formatComparableValue(value: unknown) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  return String(value);
+}
 
 export async function createMemory(input: CreateMemoryInput) {
   const supabase = await createSupabaseServerClient();
@@ -28,7 +144,7 @@ export async function createMemory(input: CreateMemoryInput) {
       room_id: input.room_id ?? null,
       parent_id: input.parent_id ?? null,
     })
-    .select("id")
+    .select(MEMORY_SELECT)
     .single();
 
   if (error) {
@@ -36,7 +152,7 @@ export async function createMemory(input: CreateMemoryInput) {
   }
 
   revalidatePath("/", "layout");
-  return { data };
+  return { data: { memory: data } };
 }
 
 export async function saveMediaRecords(
@@ -78,25 +194,107 @@ export async function updateMemory(
     return { error: "Not authenticated" };
   }
 
+  const existingMemory = await getMemoryForMutation(supabase, id);
+
+  if (!existingMemory) {
+    return { error: "Không tìm thấy kỉ niệm cần sửa." };
+  }
+
+  if (!(await canEditMemory(supabase, user.id, existingMemory))) {
+    return { error: "Bạn không có quyền sửa kỉ niệm này." };
+  }
+
+  const payload = {
+    title: updates.title?.trim(),
+    content: updates.content?.trim() || null,
+    category: updates.category?.trim() || null,
+    location: updates.location?.trim() || null,
+    type: updates.type,
+    date: updates.date,
+  };
+
+  const comparableBefore: Record<MemoryComparableField, string | null> = {
+    title: formatComparableValue(existingMemory.title),
+    content: formatComparableValue(existingMemory.content),
+    category: formatComparableValue(existingMemory.category),
+    location: formatComparableValue(existingMemory.location),
+    type: formatComparableValue(existingMemory.type),
+    date: formatComparableValue(existingMemory.date),
+  };
+
+  const comparableAfter: Record<MemoryComparableField, string | null> = {
+    title: payload.title ?? comparableBefore.title,
+    content:
+      updates.content !== undefined
+        ? payload.content
+        : comparableBefore.content,
+    category:
+      updates.category !== undefined
+        ? payload.category
+        : comparableBefore.category,
+    location:
+      updates.location !== undefined
+        ? payload.location
+        : comparableBefore.location,
+    type:
+      updates.type !== undefined
+        ? formatComparableValue(payload.type)
+        : comparableBefore.type,
+    date:
+      updates.date !== undefined
+        ? formatComparableValue(payload.date)
+        : comparableBefore.date,
+  };
+
+  const changedFields = (
+    Object.keys(memoryFieldLabels) as MemoryComparableField[]
+  )
+    .filter((field) => comparableBefore[field] !== comparableAfter[field])
+    .map((field) => [field, memoryFieldLabels[field]] as const);
+
+  if (!changedFields.length) {
+    const fullMemory = await getFullMemoryRecord(supabase, id);
+    return { data: { memory: fullMemory, historyEntries: [] } };
+  }
+
   const { error } = await supabase
     .from("memories")
-    .update({
-      title: updates.title,
-      content: updates.content,
-      category: updates.category?.trim() || null,
-      location: updates.location?.trim() || null,
-      type: updates.type,
-      date: updates.date,
-    })
-    .eq("id", id)
-    .eq("user_id", user.id);
+    .update(payload)
+    .eq("id", id);
 
   if (error) {
     return { error: error.message };
   }
 
+  const editorName = await getCurrentUserDisplayName(supabase, user);
+  const historyRows = changedFields.map(([fieldName]) => ({
+    memory_id: id,
+    room_id: existingMemory.room_id,
+    edited_by: user.id,
+    editor_name_snapshot: editorName,
+    field_name: fieldName,
+    before_value: comparableBefore[fieldName],
+    after_value: comparableAfter[fieldName],
+  }));
+
+  const insertedHistory = historyRows.length
+    ? await supabase.from("memory_edit_history").insert(historyRows).select("*")
+    : { data: [] as MemoryEditHistoryRecord[], error: null };
+
+  if (insertedHistory.error) {
+    return { error: insertedHistory.error.message };
+  }
+
+  const fullMemory = await getFullMemoryRecord(supabase, id);
+
   revalidatePath("/", "layout");
-  return { success: true };
+  return {
+    success: true,
+    data: {
+      memory: fullMemory,
+      historyEntries: (insertedHistory.data ?? []) as MemoryEditHistoryRecord[],
+    },
+  };
 }
 
 export async function deleteMemory(id: string) {
@@ -109,18 +307,24 @@ export async function deleteMemory(id: string) {
     return { error: "Not authenticated" };
   }
 
-  const { error } = await supabase
-    .from("memories")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", user.id);
+  const existingMemory = await getMemoryForMutation(supabase, id);
+
+  if (!existingMemory) {
+    return { error: "Không tìm thấy kỉ niệm cần xóa." };
+  }
+
+  if (existingMemory.user_id !== user.id) {
+    return { error: "Chỉ người tạo mới có thể xóa kỉ niệm này." };
+  }
+
+  const { error } = await supabase.from("memories").delete().eq("id", id);
 
   if (error) {
     return { error: error.message };
   }
 
   revalidatePath("/", "layout");
-  return { success: true };
+  return { success: true, data: { id } };
 }
 
 export async function deleteMedia(mediaId: string, storagePath: string) {
@@ -154,7 +358,10 @@ export async function deleteMedia(mediaId: string, storagePath: string) {
   return { success: true };
 }
 
-export async function createRoom(name: string) {
+export async function createRoom(input: {
+  name: string;
+  sharedPlaylistUrl?: string;
+}) {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -164,23 +371,30 @@ export async function createRoom(name: string) {
     return { error: "Not authenticated" };
   }
 
-  const inviteCode = Array.from(
-    { length: 6 },
-    () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)],
-  ).join("");
+  const inviteCode = generateInviteCode();
 
   const { data, error } = await supabase
     .from("rooms")
     .insert({
-      name,
-      invite_code: inviteCode,
+      name: input.name,
+      shared_playlist_url: input.sharedPlaylistUrl?.trim() || null,
       created_by: user.id,
     })
-    .select("id, invite_code")
+    .select("id, name, created_by, shared_playlist_url, expires_at, created_at")
     .single();
 
   if (error) {
     return { error: error.message };
+  }
+
+  const { error: inviteError } = await supabase.from("room_invites").insert({
+    room_id: data.id,
+    code: inviteCode,
+    created_by: user.id,
+  });
+
+  if (inviteError) {
+    return { error: inviteError.message };
   }
 
   const { error: memberError } = await supabase.from("room_members").insert({
@@ -193,8 +407,18 @@ export async function createRoom(name: string) {
     return { error: memberError.message };
   }
 
+  const room: RoomSummary = {
+    ...data,
+    invite_code: inviteCode,
+    member_count: 1,
+    other_members: [],
+    shared_member_count: 0,
+    is_shared: false,
+    invite_only: true,
+  };
+
   revalidatePath("/friends");
-  return { data };
+  return { data: { room } };
 }
 
 export async function joinRoom(inviteCode: string) {
@@ -234,13 +458,20 @@ export async function joinRoom(inviteCode: string) {
 
   const { data: room, error: roomError } = await supabase
     .from("rooms")
-    .select("id, name, invite_code")
+    .select("id, name, created_by, shared_playlist_url, expires_at, created_at")
     .eq("id", roomId)
     .single();
 
   if (roomError || !room) {
     return { error: "Không thể tải thông tin phòng sau khi tham gia." };
   }
+
+  const { data: inviteData } = await supabase
+    .from("room_invites")
+    .select("code")
+    .eq("room_id", room.id)
+    .eq("is_active", true)
+    .maybeSingle();
 
   const { data: roomInfo } = await supabase
     .from("rooms")
@@ -298,10 +529,44 @@ export async function joinRoom(inviteCode: string) {
 
   revalidatePath("/friends");
   revalidatePath(`/friends/${room.id}`);
-  return { data: { room_id: room.id, room_name: room.name, message } };
+  return {
+    data: {
+      room_id: room.id,
+      room_name: room.name,
+      message,
+      room: {
+        ...room,
+        invite_code: inviteData?.code ?? null,
+        member_count: roomMembers?.length ?? 0,
+        other_members:
+          roomMembers
+            ?.filter((member) => member.user_id !== user.id)
+            .map(
+              (member) =>
+                profilesById.get(member.user_id)?.display_name ||
+                "Khách ẩn danh",
+            ) ?? [],
+        shared_member_count:
+          roomMembers?.filter((member) => member.user_id !== room.created_by)
+            .length ?? 0,
+        is_shared:
+          (roomMembers?.filter((member) => member.user_id !== room.created_by)
+            .length ?? 0) > 0,
+        invite_only:
+          (roomMembers?.filter((member) => member.user_id !== room.created_by)
+            .length ?? 0) === 0,
+      } satisfies RoomSummary,
+    },
+  };
 }
 
-export async function updateRoom(roomId: string, name: string) {
+export async function updateRoom(
+  roomId: string,
+  updates: {
+    name?: string;
+    sharedPlaylistUrl?: string | null;
+  },
+) {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -325,16 +590,32 @@ export async function updateRoom(roomId: string, name: string) {
 
   const { error } = await supabase
     .from("rooms")
-    .update({ name: name.trim() })
+    .update({
+      name: updates.name?.trim(),
+      shared_playlist_url: updates.sharedPlaylistUrl?.trim() || null,
+    })
     .eq("id", roomId);
 
   if (error) {
     return { error: error.message };
   }
 
+  const { data: room } = await supabase
+    .from("rooms")
+    .select("id, name, created_by, shared_playlist_url, expires_at, created_at")
+    .eq("id", roomId)
+    .single();
+
   revalidatePath("/friends");
   revalidatePath(`/friends/${roomId}`);
-  return { success: true };
+  return {
+    success: true,
+    data: room
+      ? {
+          ...room,
+        }
+      : null,
+  };
 }
 
 export async function deleteRoom(roomId: string) {
@@ -403,4 +684,220 @@ export async function signOut() {
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
   redirect("/login");
+}
+
+export async function createPlaylist(input: {
+  roomId?: string | null;
+  name: string;
+  description?: string | null;
+}) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data, error } = await supabase
+    .from("playlists")
+    .insert({
+      room_id: input.roomId ?? null,
+      created_by: user.id,
+      name: input.name.trim(),
+      description: input.description?.trim() || null,
+    })
+    .select(PLAYLIST_SELECT)
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  if (input.roomId) {
+    revalidatePath(`/friends/${input.roomId}`);
+  }
+
+  return { data: data as PlaylistRecord };
+}
+
+export async function updatePlaylist(
+  playlistId: string,
+  updates: { name?: string; description?: string | null },
+) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: existingPlaylist } = await supabase
+    .from("playlists")
+    .select("room_id")
+    .eq("id", playlistId)
+    .single();
+
+  const { data, error } = await supabase
+    .from("playlists")
+    .update({
+      name: updates.name?.trim(),
+      description: updates.description?.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", playlistId)
+    .select(PLAYLIST_SELECT)
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  if (existingPlaylist?.room_id) {
+    revalidatePath(`/friends/${existingPlaylist.room_id}`);
+  }
+
+  return { data: data as PlaylistRecord };
+}
+
+export async function deletePlaylist(playlistId: string) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: playlist } = await supabase
+    .from("playlists")
+    .select("room_id")
+    .eq("id", playlistId)
+    .single();
+
+  const { error } = await supabase
+    .from("playlists")
+    .delete()
+    .eq("id", playlistId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  if (playlist?.room_id) {
+    revalidatePath(`/friends/${playlist.room_id}`);
+  }
+
+  return { success: true, data: { id: playlistId } };
+}
+
+export async function addTrackToPlaylist(
+  playlistId: string,
+  track: MusicSearchResult,
+) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: playlist } = await supabase
+    .from("playlists")
+    .select("id, room_id")
+    .eq("id", playlistId)
+    .single();
+
+  if (!playlist) {
+    return { error: "Playlist không tồn tại." };
+  }
+
+  const { data: lastTrack } = await supabase
+    .from("playlist_tracks")
+    .select("position")
+    .eq("playlist_id", playlistId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data, error } = await supabase
+    .from("playlist_tracks")
+    .upsert(
+      {
+        playlist_id: playlistId,
+        source: track.source,
+        source_track_id: track.source_track_id,
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        artwork_url: track.artwork_url,
+        preview_url: track.preview_url,
+        external_url: track.external_url,
+        duration_ms: track.duration_ms,
+        position: (lastTrack?.position ?? -1) + 1,
+        metadata: {
+          source: track.source,
+        },
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "playlist_id,source,source_track_id" },
+    )
+    .select("*")
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  if (playlist.room_id) {
+    revalidatePath(`/friends/${playlist.room_id}`);
+  }
+
+  return { data: data as PlaylistTrackRecord };
+}
+
+export async function removeTrackFromPlaylist(trackId: string) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data: track } = await supabase
+    .from("playlist_tracks")
+    .select("id, playlist_id, playlists(room_id)")
+    .eq("id", trackId)
+    .single();
+
+  const { error } = await supabase
+    .from("playlist_tracks")
+    .delete()
+    .eq("id", trackId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  const roomId = Array.isArray(track?.playlists)
+    ? ((track.playlists[0] as { room_id: string | null } | undefined)
+        ?.room_id ?? null)
+    : null;
+
+  if (roomId) {
+    revalidatePath(`/friends/${roomId}`);
+  }
+
+  return {
+    success: true,
+    data: { id: trackId, playlist_id: track?.playlist_id ?? null },
+  };
 }

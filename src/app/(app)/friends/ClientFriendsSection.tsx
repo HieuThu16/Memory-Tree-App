@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { RoomRecord } from "@/lib/types";
-import { createRoom, joinRoom, deleteRoom, updateRoom, leaveRoom } from "@/lib/actions";
+import type { RoomSummary } from "@/lib/types";
+import { createRoom, joinRoom, deleteRoom, updateRoom } from "@/lib/actions";
 import { useUiStore } from "@/lib/stores/uiStore";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -10,40 +10,57 @@ import { useRouter } from "next/navigation";
 export default function ClientFriendsSection({
   initialRooms,
 }: {
-  initialRooms: (RoomRecord & {
-    member_count: number;
-    other_members: string[];
-    shared_member_count: number;
-    is_shared: boolean;
-    invite_only: boolean;
-  })[];
+  initialRooms: RoomSummary[];
 }) {
   const addToast = useUiStore((s) => s.addToast);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
+  const [rooms, setRooms] = useState(initialRooms);
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
   const [roomName, setRoomName] = useState("");
+  const [sharedPlaylistUrl, setSharedPlaylistUrl] = useState("");
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+
+  const upsertRoom = (nextRoom: RoomSummary) => {
+    setRooms((current) => {
+      const existingIndex = current.findIndex(
+        (room) => room.id === nextRoom.id,
+      );
+
+      if (existingIndex === -1) {
+        return [nextRoom, ...current];
+      }
+
+      return current.map((room) =>
+        room.id === nextRoom.id ? { ...room, ...nextRoom } : room,
+      );
+    });
+  };
 
   const handleCreate = () => {
     if (!roomName.trim()) return;
 
     startTransition(async () => {
-      const result = await createRoom(roomName.trim());
+      const result = await createRoom({
+        name: roomName.trim(),
+        sharedPlaylistUrl,
+      });
       if (result.error) {
         addToast(result.error, "error");
-      } else if (!result.data) {
+      } else if (!result.data?.room) {
         addToast("Lỗi tạo vườn", "error");
       } else {
+        upsertRoom(result.data.room);
         addToast("Tạo vườn thành công! 🌱", "success");
         setRoomName("");
+        setSharedPlaylistUrl("");
         setShowCreate(false);
         router.refresh();
-        router.push(`/friends/${result.data.id}`);
+        router.push(`/friends/${result.data.room.id}`);
       }
     });
   };
@@ -58,6 +75,9 @@ export default function ClientFriendsSection({
       } else if (!result.data) {
         addToast("Lỗi tham gia", "error");
       } else {
+        if (result.data.room) {
+          upsertRoom(result.data.room);
+        }
         addToast(result.data.message, "success");
         setInviteCode("");
         setShowJoin(false);
@@ -75,21 +95,8 @@ export default function ClientFriendsSection({
       if (result.error) {
         addToast(result.error, "error");
       } else {
+        setRooms((current) => current.filter((room) => room.id !== roomId));
         addToast("Đã xóa vườn 🍂", "success");
-        router.refresh();
-      }
-    });
-  };
-
-  const handleLeaveRoom = (roomId: string) => {
-    if (!confirm("Rời khỏi khu vườn này?")) return;
-
-    startTransition(async () => {
-      const result = await leaveRoom(roomId);
-      if (result.error) {
-        addToast(result.error, "error");
-      } else {
-        addToast("Đã rời vườn", "success");
         router.refresh();
       }
     });
@@ -99,10 +106,28 @@ export default function ClientFriendsSection({
     if (!editingName.trim()) return;
 
     startTransition(async () => {
-      const result = await updateRoom(roomId, editingName.trim());
+      const currentRoom = rooms.find((room) => room.id === roomId);
+      const result = await updateRoom(roomId, {
+        name: editingName.trim(),
+        sharedPlaylistUrl: currentRoom?.shared_playlist_url ?? null,
+      });
+
       if (result.error) {
         addToast(result.error, "error");
       } else {
+        setRooms((current) =>
+          current.map((room) =>
+            room.id === roomId
+              ? {
+                  ...room,
+                  name: result.data?.name ?? editingName.trim(),
+                  shared_playlist_url:
+                    result.data?.shared_playlist_url ??
+                    room.shared_playlist_url,
+                }
+              : room,
+          ),
+        );
         addToast("Đã đổi tên 🌿", "success");
         setEditingRoomId(null);
         router.refresh();
@@ -120,7 +145,10 @@ export default function ClientFriendsSection({
         <div className="flex gap-1.5">
           <button
             type="button"
-            onClick={() => { setShowJoin(!showJoin); setShowCreate(false); }}
+            onClick={() => {
+              setShowJoin(!showJoin);
+              setShowCreate(false);
+            }}
             className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold transition ${
               showJoin
                 ? "border-accent bg-accent text-white"
@@ -131,7 +159,10 @@ export default function ClientFriendsSection({
           </button>
           <button
             type="button"
-            onClick={() => { setShowCreate(!showCreate); setShowJoin(false); }}
+            onClick={() => {
+              setShowCreate(!showCreate);
+              setShowJoin(false);
+            }}
             className="btn-primary rounded-full px-3 py-1.5 text-[10px]"
           >
             + Tạo 🌱
@@ -163,19 +194,28 @@ export default function ClientFriendsSection({
 
       {/* Create form */}
       {showCreate && (
-        <div className="glass-card flex items-center gap-2 rounded-xl p-3">
-          <input
-            type="text"
-            placeholder="Tên vườn mới..."
-            value={roomName}
-            onChange={(e) => setRoomName(e.target.value)}
-            className="input-field flex-1 !rounded-lg !py-2 !text-sm"
-          />
+        <div className="glass-card rounded-xl p-3">
+          <div className="grid gap-2">
+            <input
+              type="text"
+              placeholder="Tên vườn mới..."
+              value={roomName}
+              onChange={(e) => setRoomName(e.target.value)}
+              className="input-field !rounded-lg !py-2 !text-sm"
+            />
+            <input
+              type="url"
+              placeholder="Link playlist Spotify (tuỳ chọn)"
+              value={sharedPlaylistUrl}
+              onChange={(e) => setSharedPlaylistUrl(e.target.value)}
+              className="input-field !rounded-lg !py-2 !text-sm"
+            />
+          </div>
           <button
             type="button"
             disabled={isPending || !roomName}
             onClick={handleCreate}
-            className="btn-primary whitespace-nowrap px-4 py-2 text-xs disabled:opacity-50"
+            className="btn-primary mt-3 w-full whitespace-nowrap px-4 py-2 text-xs disabled:opacity-50"
           >
             {isPending ? "..." : "Tạo 🌱"}
           </button>
@@ -183,7 +223,7 @@ export default function ClientFriendsSection({
       )}
 
       {/* Room list */}
-      {initialRooms.length === 0 ? (
+      {rooms.length === 0 ? (
         <div className="glass-card flex flex-col items-center justify-center rounded-2xl p-8 text-center">
           <span className="text-3xl">🌼</span>
           <p className="mt-3 text-sm text-text-secondary">
@@ -192,7 +232,7 @@ export default function ClientFriendsSection({
         </div>
       ) : (
         <div className="grid gap-2 sm:grid-cols-2">
-          {initialRooms.map((room) => (
+          {rooms.map((room) => (
             <div
               key={room.id}
               className="glass-card glass-card-hover rounded-xl p-3 sm:p-4"
@@ -203,6 +243,7 @@ export default function ClientFriendsSection({
                   <div className="flex flex-1 items-center gap-1.5">
                     <input
                       type="text"
+                      aria-label="Đổi tên khu vườn"
                       value={editingName}
                       onChange={(e) => setEditingName(e.target.value)}
                       className="input-field flex-1 !rounded-lg !py-1.5 !text-sm"
@@ -239,9 +280,7 @@ export default function ClientFriendsSection({
                           🌸 {room.other_members.join(", ")}
                         </span>
                       )}
-                      {!room.is_shared && (
-                        <span>🌼 Chờ mời</span>
-                      )}
+                      {!room.is_shared && <span>🌼 Chờ mời</span>}
                       <span className="opacity-50">•</span>
                       <span>{room.member_count} 👥</span>
                     </div>
@@ -260,7 +299,16 @@ export default function ClientFriendsSection({
                       className="rounded-lg p-1.5 text-text-muted transition hover:bg-white/80 hover:text-accent"
                       title="Đổi tên"
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                       </svg>
@@ -273,7 +321,16 @@ export default function ClientFriendsSection({
                       className="rounded-lg p-1.5 text-text-muted transition hover:bg-white/80 hover:text-rose disabled:opacity-50"
                       title="Xóa vườn"
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
                         <polyline points="3 6 5 6 21 6" />
                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                       </svg>
@@ -285,11 +342,17 @@ export default function ClientFriendsSection({
               {/* Invite code */}
               <div className="mt-2 flex items-center justify-between rounded-lg bg-white/70 px-2.5 py-1.5">
                 <span className="font-mono text-xs font-bold tracking-[0.25em] text-accent">
-                  {room.invite_code}
+                  {room.invite_code ?? "------"}
                 </span>
                 <button
                   type="button"
+                  disabled={!room.invite_code}
                   onClick={() => {
+                    if (!room.invite_code) {
+                      addToast("Room này chưa có mã mời hoạt động.", "error");
+                      return;
+                    }
+
                     navigator.clipboard.writeText(room.invite_code);
                     addToast("Đã copy mã mời 📋", "success");
                   }}
@@ -298,6 +361,12 @@ export default function ClientFriendsSection({
                   📋
                 </button>
               </div>
+
+              {room.shared_playlist_url ? (
+                <p className="mt-2 text-[10px] font-medium text-text-secondary">
+                  🎵 Có playlist chung
+                </p>
+              ) : null}
 
               {/* Enter button */}
               <Link

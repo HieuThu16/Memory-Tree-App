@@ -112,6 +112,20 @@ export default function MemoryCard({
               {memory.content}
             </p>
           )}
+          {memory.category || memory.location ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {memory.category ? (
+                <span className="rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] font-medium text-text-secondary">
+                  ✿ {memory.category}
+                </span>
+              ) : null}
+              {memory.location ? (
+                <span className="rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] font-medium text-text-secondary">
+                  📍 {memory.location}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 

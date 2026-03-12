@@ -30,10 +30,14 @@ export default function InstallAppButton() {
   const addToast = useUiStore((state) => state.addToast);
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(() => isStandalone());
 
   useEffect(() => {
-    setIsInstalled(isStandalone());
+    const standaloneMedia = window.matchMedia("(display-mode: standalone)");
+
+    const syncInstalledState = () => {
+      setIsInstalled(isStandalone());
+    };
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
@@ -48,6 +52,8 @@ export default function InstallAppButton() {
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleInstalled);
+    standaloneMedia.addEventListener("change", syncInstalledState);
+    window.addEventListener("pageshow", syncInstalledState);
 
     return () => {
       window.removeEventListener(
@@ -55,6 +61,8 @@ export default function InstallAppButton() {
         handleBeforeInstallPrompt,
       );
       window.removeEventListener("appinstalled", handleInstalled);
+      standaloneMedia.removeEventListener("change", syncInstalledState);
+      window.removeEventListener("pageshow", syncInstalledState);
     };
   }, [addToast]);
 

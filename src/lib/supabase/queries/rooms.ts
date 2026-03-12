@@ -1,4 +1,4 @@
-import type { MemoryParticipant, RoomRecord } from "@/lib/types";
+import type { MemoryParticipant, RoomRecord, RoomSummary } from "@/lib/types";
 import { createSupabaseServerClient } from "../server";
 
 type ProfileLookupRecord = {
@@ -32,15 +32,29 @@ async function getProfilesByIds(
   );
 }
 
-export async function getUserRooms(): Promise<
-  (RoomRecord & {
-    member_count: number;
-    other_members: string[];
-    shared_member_count: number;
-    is_shared: boolean;
-    invite_only: boolean;
-  })[]
-> {
+async function getActiveInviteCodesByRoomIds(
+  roomIds: string[],
+): Promise<Map<string, string>> {
+  if (!roomIds.length) {
+    return new Map();
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("room_invites")
+    .select("room_id, code")
+    .in("room_id", roomIds)
+    .eq("is_active", true);
+
+  if (error) {
+    console.error("Failed to load room invites", error.message);
+    return new Map();
+  }
+
+  return new Map((data ?? []).map((invite) => [invite.room_id, invite.code]));
+}
+
+export async function getUserRooms(): Promise<RoomSummary[]> {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -60,10 +74,11 @@ export async function getUserRooms(): Promise<
   }
 
   const roomIds = [...new Set(memberships.map((m) => m.room_id))];
+  const inviteCodesByRoomId = await getActiveInviteCodesByRoomIds(roomIds);
 
   const { data: rooms, error: roomError } = await supabase
     .from("rooms")
-    .select("*")
+    .select("id, name, created_by, shared_playlist_url, expires_at, created_at")
     .in("id", roomIds)
     .order("created_at", { ascending: false });
 
@@ -96,6 +111,7 @@ export async function getUserRooms(): Promise<
 
       return {
         ...room,
+        invite_code: inviteCodesByRoomId.get(room.id) ?? null,
         member_count: count,
         other_members: otherMembers,
         shared_member_count: sharedMemberCount,
@@ -112,17 +128,50 @@ export async function getRoomByInviteCode(
   code: string,
 ): Promise<RoomRecord | null> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("rooms")
-    .select("*")
-    .eq("invite_code", code)
+  const { data: invite, error: inviteError } = await supabase
+    .from("room_invites")
+    .select("room_id, code")
+    .eq("code", code)
+    .eq("is_active", true)
     .single();
 
-  if (error) {
+  if (inviteError || !invite) {
     return null;
   }
 
-  return data ?? null;
+  const { data, error } = await supabase
+    .from("rooms")
+    .select("id, name, created_by, shared_playlist_url, expires_at, created_at")
+    .eq("id", invite.room_id)
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return {
+    ...data,
+    invite_code: invite.code,
+  };
+}
+
+export async function getRoomInviteCode(
+  roomId: string,
+): Promise<string | null> {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("room_invites")
+    .select("code")
+    .eq("room_id", roomId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to load active invite code", error.message);
+    return null;
+  }
+
+  return data?.code ?? null;
 }
 
 export async function getCurrentUser() {
@@ -180,9 +229,11 @@ export async function getRoomParticipants(
 /**
  * Lấy danh sách bạn bè của một user (những người cùng chung ít nhất 1 phòng)
  */
-export async function getUserFriends(userId: string): Promise<MemoryParticipant[]> {
+export async function getUserFriends(
+  userId: string,
+): Promise<MemoryParticipant[]> {
   const supabase = await createSupabaseServerClient();
-  
+
   // Lấy các phòng mà user đang tham gia
   const { data: memberships, error: memberError } = await supabase
     .from("room_members")
@@ -201,7 +252,7 @@ export async function getUserFriends(userId: string): Promise<MemoryParticipant[
     .neq("user_id", userId);
 
   if (friendsError || !friendsData?.length) return [];
-  
+
   // Lọc trùng lặp user_id (trường hợp cùng chung nhiều phòng)
   const uniqueFriendsMap = new Map();
   for (const f of friendsData) {
@@ -212,7 +263,7 @@ export async function getUserFriends(userId: string): Promise<MemoryParticipant[
   const uniqueFriends = Array.from(uniqueFriendsMap.values());
 
   const profilesById = await getProfilesByIds(
-    uniqueFriends.map((f) => f.user_id)
+    uniqueFriends.map((f) => f.user_id),
   );
 
   return uniqueFriends.map((friend) => {
@@ -229,20 +280,23 @@ export async function getUserFriends(userId: string): Promise<MemoryParticipant[
 /**
  * Kiểm tra xem 2 user có phải là bạn bè không (bằng cách check xem có chung room_id nào không)
  */
-export async function checkAreFriends(userId1: string, userId2: string): Promise<boolean> {
+export async function checkAreFriends(
+  userId1: string,
+  userId2: string,
+): Promise<boolean> {
   if (userId1 === userId2) return false;
   const supabase = await createSupabaseServerClient();
-  
+
   // Lấy danh sách room của người 1
   const { data, error } = await supabase
     .from("room_members")
     .select("room_id")
     .eq("user_id", userId1);
-    
+
   if (error || !data || data.length === 0) return false;
-  
-  const roomIds = data.map(m => m.room_id);
-  
+
+  const roomIds = data.map((m) => m.room_id);
+
   // Xem người 2 có nằm trong bất kỳ room nào của người 1 không
   const { data: sharedRooms, error: sharedError } = await supabase
     .from("room_members")
@@ -250,6 +304,6 @@ export async function checkAreFriends(userId1: string, userId2: string): Promise
     .eq("user_id", userId2)
     .in("room_id", roomIds)
     .limit(1);
-    
+
   return !sharedError && sharedRooms && sharedRooms.length > 0;
 }
