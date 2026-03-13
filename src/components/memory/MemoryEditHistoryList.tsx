@@ -58,11 +58,9 @@ export default function MemoryEditHistoryList({
               {fieldLabels[entry.field_name] || entry.field_name}
             </p>
             <p className="mt-1 text-xs leading-relaxed text-text-secondary">
-              Từ "{formatHistoryValue(entry.before_value)}" thành "
-              {formatHistoryValue(entry.after_value)}"
-            </p>
-            <p className="mt-1 text-[11px] text-text-muted">
-              {new Date(entry.created_at).toLocaleString("vi-VN")}
+              Từ &quot;{formatHistoryValue(entry.before_value)}&quot; thành
+              &quot;
+              {formatHistoryValue(entry.after_value)}&quot;
             </p>
           </div>
         ))}

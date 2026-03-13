@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import type { RoomSummary } from "@/lib/types";
 import { createRoom, joinRoom, deleteRoom, updateRoom } from "@/lib/actions";
 import { useUiStore } from "@/lib/stores/uiStore";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 export default function ClientFriendsSection({
@@ -21,7 +20,7 @@ export default function ClientFriendsSection({
   const [showJoin, setShowJoin] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
   const [roomName, setRoomName] = useState("");
-  const [sharedPlaylistUrl, setSharedPlaylistUrl] = useState("");
+  const [navigatingRoomId, setNavigatingRoomId] = useState<string | null>(null);
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
 
@@ -45,10 +44,7 @@ export default function ClientFriendsSection({
     if (!roomName.trim()) return;
 
     startTransition(async () => {
-      const result = await createRoom({
-        name: roomName.trim(),
-        sharedPlaylistUrl,
-      });
+      const result = await createRoom({ name: roomName.trim() });
       if (result.error) {
         addToast(result.error, "error");
       } else if (!result.data?.room) {
@@ -57,7 +53,6 @@ export default function ClientFriendsSection({
         upsertRoom(result.data.room);
         addToast("Tạo vườn thành công! 🌱", "success");
         setRoomName("");
-        setSharedPlaylistUrl("");
         setShowCreate(false);
         router.refresh();
         router.push(`/friends/${result.data.room.id}`);
@@ -106,11 +101,7 @@ export default function ClientFriendsSection({
     if (!editingName.trim()) return;
 
     startTransition(async () => {
-      const currentRoom = rooms.find((room) => room.id === roomId);
-      const result = await updateRoom(roomId, {
-        name: editingName.trim(),
-        sharedPlaylistUrl: currentRoom?.shared_playlist_url ?? null,
-      });
+      const result = await updateRoom(roomId, { name: editingName.trim() });
 
       if (result.error) {
         addToast(result.error, "error");
@@ -201,13 +192,6 @@ export default function ClientFriendsSection({
               placeholder="Tên vườn mới..."
               value={roomName}
               onChange={(e) => setRoomName(e.target.value)}
-              className="input-field !rounded-lg !py-2 !text-sm"
-            />
-            <input
-              type="url"
-              placeholder="Link playlist Spotify (tuỳ chọn)"
-              value={sharedPlaylistUrl}
-              onChange={(e) => setSharedPlaylistUrl(e.target.value)}
               className="input-field !rounded-lg !py-2 !text-sm"
             />
           </div>
@@ -362,20 +346,17 @@ export default function ClientFriendsSection({
                 </button>
               </div>
 
-              {room.shared_playlist_url ? (
-                <p className="mt-2 text-[10px] font-medium text-text-secondary">
-                  🎵 Có playlist chung
-                </p>
-              ) : null}
-
               {/* Enter button */}
-              <Link
-                href={`/friends/${room.id}`}
-                prefetch={true}
+              <button
+                type="button"
+                onClick={() => {
+                  setNavigatingRoomId(room.id);
+                  router.push(`/friends/${room.id}`);
+                }}
                 className="btn-secondary mt-2 flex w-full items-center justify-center py-2 text-[10px]"
               >
-                Vào vườn →
-              </Link>
+                {navigatingRoomId === room.id ? "Đang vào..." : "Vào vườn →"}
+              </button>
             </div>
           ))}
         </div>

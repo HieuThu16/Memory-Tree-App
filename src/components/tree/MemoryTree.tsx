@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import type {
   MemoryEditHistoryRecord,
   MemoryParticipant,
@@ -179,6 +186,9 @@ export default function MemoryTree({
   const removeMemory = useMemoryStore((s) => s.removeMemory);
   const histories = useMemoryStore((s) => s.histories);
   const setHistory = useMemoryStore((s) => s.setHistory);
+  const [historyOpenForMemoryId, setHistoryOpenForMemoryId] = useState<
+    string | null
+  >(null);
   const [isDeleting, startDeleteTransition] = useTransition();
 
   const treeData = useMemo(() => buildTree(memories), [memories]);
@@ -371,6 +381,23 @@ export default function MemoryTree({
     };
   }, [addToast, historyEntries, selectedMemory, setHistory]);
 
+  useEffect(() => {
+    if (!isDetailOpen) {
+      return;
+    }
+
+    const originalOverflow = document.body.style.overflow;
+    const originalOverscrollBehavior = document.body.style.overscrollBehavior;
+
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "contain";
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.body.style.overscrollBehavior = originalOverscrollBehavior;
+    };
+  }, [isDetailOpen]);
+
   const handleDownload = () => {
     if (!svgRef.current) return;
 
@@ -471,6 +498,9 @@ export default function MemoryTree({
     setIsDetailOpen(false);
     setEditingMemory(memory);
   };
+
+  const isHistoryOpen =
+    !!selectedMemory && historyOpenForMemoryId === selectedMemory.id;
 
   return (
     <div className="w-full">
@@ -700,17 +730,24 @@ export default function MemoryTree({
       {/* Detail Popup - shown on click (immediately for 2-person rooms) */}
       {isDetailOpen && selectedMemory ? (
         <div
-          className="modal-overlay z-[60]"
+          className="fixed left-0 top-0 z-[9999] h-[100dvh] w-screen bg-white"
           onClick={() => setIsDetailOpen(false)}
         >
           <div
-            className="glass-card max-h-[88vh] w-full max-w-lg overflow-hidden rounded-2xl sm:rounded-[30px]"
+            className="glass-card flex h-full min-h-0 w-full flex-col overflow-hidden rounded-none"
             onClick={(event) => event.stopPropagation()}
           >
             {/* Popup Header */}
             <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-lg">🌿</span>
+              <div className="flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDetailOpen(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-accent hover:text-accent"
+                  title="Quay lại"
+                >
+                  ←
+                </button>
                 <h3 className="truncate text-base font-semibold text-foreground sm:text-lg">
                   {selectedMemory.title}
                 </h3>
@@ -759,25 +796,17 @@ export default function MemoryTree({
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                   </svg>
                 </button>
-                {/* Close */}
-                <button
-                  type="button"
-                  onClick={() => setIsDetailOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-accent hover:text-accent"
-                >
-                  ✕
-                </button>
               </div>
             </div>
 
             {/* Popup Body */}
-            <div className="max-h-[calc(88vh-56px)] overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 sm:py-4 [-webkit-overflow-scrolling:touch]">
               {/* Meta info row */}
-              <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+              <div className="flex flex-wrap items-center gap-1 text-[10px] sm:gap-1.5">
                 <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-text-secondary">
                   🗓 {formatLongDate(selectedMemory)}
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-text-muted">
+                <span className="hidden items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-text-muted sm:inline-flex">
                   🕐 Tạo: {formatCreatedAt(selectedMemory)}
                 </span>
                 {selectedMemory.category && !selectedMemory.room_id ? (
@@ -794,7 +823,7 @@ export default function MemoryTree({
 
               {/* Author */}
               {selectedAppearance ? (
-                <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-border bg-white/80 px-2.5 py-1 text-[11px] text-text-secondary">
+                <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] text-text-secondary sm:mt-2 sm:px-2.5 sm:text-[11px]">
                   <div
                     className="flex h-5 w-5 items-center justify-center rounded-full text-[7px] font-bold"
                     style={{
@@ -827,10 +856,27 @@ export default function MemoryTree({
                 </p>
               ) : null}
 
-              <MemoryEditHistoryList
-                entries={historyEntries ?? []}
-                loading={isHistoryLoading}
-              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (!selectedMemory) return;
+                  setHistoryOpenForMemoryId((prev) =>
+                    prev === selectedMemory.id ? null : selectedMemory.id,
+                  );
+                }}
+                className="mt-3 rounded-full border border-border bg-white/80 px-3 py-1.5 text-xs font-semibold text-text-secondary"
+              >
+                {isHistoryOpen
+                  ? "Ẩn lịch sử chỉnh sửa"
+                  : "Xem lịch sử chỉnh sửa"}
+              </button>
+
+              {isHistoryOpen ? (
+                <MemoryEditHistoryList
+                  entries={historyEntries ?? []}
+                  loading={isHistoryLoading}
+                />
+              ) : null}
             </div>
           </div>
         </div>

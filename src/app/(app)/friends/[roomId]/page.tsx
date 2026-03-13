@@ -6,13 +6,11 @@ import {
 } from "@/lib/supabase/queries/rooms";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getRoomMemories } from "@/lib/supabase/queries/memories";
-import { getRoomPlaylists } from "@/lib/supabase/queries/playlists";
 import RealtimeRoomProvider from "@/components/realtime/RealtimeRoomProvider";
 import LiveCursor from "@/components/realtime/LiveCursor";
 import PresenceAvatars from "@/components/realtime/PresenceAvatars";
 import Link from "next/link";
 import InviteLinkButton from "@/components/room/InviteLinkButton";
-import RoomPlaylistManager from "@/components/music/RoomPlaylistManager";
 
 export const dynamic = "force-dynamic";
 
@@ -52,10 +50,9 @@ export default async function RoomPage({
     return notFound();
   }
 
-  const [memories, participants, playlists] = await Promise.all([
+  const [memories, participants] = await Promise.all([
     getRoomMemories(roomId),
     getRoomParticipants(roomId),
-    getRoomPlaylists(roomId),
   ]);
   const inviteCode = await getRoomInviteCode(roomId);
   const roomRecord = {
@@ -136,8 +133,6 @@ export default async function RoomPage({
               <InviteLinkButton inviteCode={roomRecord.invite_code} />
             </div>
           </div>
-
-          <RoomPlaylistManager roomId={roomId} initialPlaylists={playlists} />
 
           <RoomClientSection
             memories={memories}

@@ -588,12 +588,23 @@ export async function updateRoom(
     return { error: "Chỉ chủ vườn mới có thể đổi tên." };
   }
 
+  const updatePayload: {
+    name?: string;
+    shared_playlist_url?: string | null;
+  } = {};
+
+  if (typeof updates.name === "string") {
+    updatePayload.name = updates.name.trim();
+  }
+
+  if (updates.sharedPlaylistUrl !== undefined) {
+    updatePayload.shared_playlist_url =
+      updates.sharedPlaylistUrl?.trim() || null;
+  }
+
   const { error } = await supabase
     .from("rooms")
-    .update({
-      name: updates.name?.trim(),
-      shared_playlist_url: updates.sharedPlaylistUrl?.trim() || null,
-    })
+    .update(updatePayload)
     .eq("id", roomId);
 
   if (error) {

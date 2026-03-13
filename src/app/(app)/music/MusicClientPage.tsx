@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { PlaylistRecord, RoomSummary } from "@/lib/types";
 import RoomPlaylistManager from "@/components/music/RoomPlaylistManager";
@@ -34,11 +35,10 @@ export default function MusicClientPage({
   return (
     <main className="px-3 pb-24 pt-3 sm:px-6 sm:pt-4">
       <section className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-        {/* Header */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h1 className="text-base font-semibold text-foreground sm:text-lg">
-              🎵 Nhạc chung
+              ?? Nh?c chung
             </h1>
             <span className="rounded-full border border-border bg-white/80 px-2.5 py-1 text-[10px] font-semibold text-text-secondary">
               {initialPlaylists.length} playlist
@@ -49,32 +49,30 @@ export default function MusicClientPage({
           </span>
         </div>
 
-        {/* No rooms */}
         {rooms.length === 0 ? (
           <div className="glass-card rounded-[28px] p-10 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 text-3xl">
-              🎵
+              ??
             </div>
             <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-accent">
-              Chưa có khu vườn
+              Chưa có khu vư?n
             </p>
             <h2 className="mt-3 text-xl font-medium text-foreground">
-              Tạo hoặc tham gia khu vườn trước
+              T?o ho?c tham gia khu vư?n trư?c
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-text-secondary">
-              Playlist nhạc được gắn theo từng khu vườn chung. Hãy tạo hoặc nhận
-              lời mời vào khu vườn với bạn bè để bắt đầu nghe nhạc cùng nhau.
+              Playlist nh?c đư?c g?n theo t?ng khu vư?n chung. H?y t?o ho?c nh?n
+              l?i m?i vào khu vư?n v?i b?n bè đ? b?t đ?u nghe nh?c cùng nhau.
             </p>
-            <a
+            <Link
               href="/friends"
               className="btn-primary mt-5 inline-block px-6 py-3 text-sm"
             >
-              Đến trang Bạn bè →
-            </a>
+              Đ?n trang B?n bè ?
+            </Link>
           </div>
         ) : (
           <>
-            {/* Room selector */}
             {rooms.length > 1 ? (
               <div className="flex flex-wrap gap-2">
                 {rooms.map((room) => (
@@ -88,8 +86,8 @@ export default function MusicClientPage({
                         : "border-border bg-white/80 text-foreground hover:border-accent/60"
                     }`}
                   >
-                    🌿 {room.name || "Khu vườn"}
-                    <span className="ml-1.5 opacity-70 text-[11px]">
+                    ?? {room.name || "Khu vư?n"}
+                    <span className="ml-1.5 text-[11px] opacity-70">
                       {room.member_count} thành viên
                     </span>
                   </button>
@@ -98,7 +96,7 @@ export default function MusicClientPage({
             ) : (
               <div className="flex items-center gap-2 rounded-2xl border border-border bg-white/80 px-4 py-2.5">
                 <span className="text-sm font-medium text-foreground">
-                  🌿 {selectedRoom?.name || "Khu vườn"}
+                  ?? {selectedRoom?.name || "Khu vư?n"}
                 </span>
                 <span className="text-[11px] text-text-muted">
                   · {selectedRoom?.member_count ?? 0} thành viên
@@ -109,19 +107,6 @@ export default function MusicClientPage({
               </div>
             )}
 
-            {/* Instructions banner */}
-            <div className="rounded-2xl border border-dashed border-accent/30 bg-accent/5 px-4 py-3 text-[12px] text-text-secondary leading-relaxed">
-              <span className="font-semibold text-accent">Realtime:</span> Bài
-              nhạc bạn hoặc bạn bè thêm vào playlist sẽ xuất hiện ngay lập tức
-              cho cả hai. Khi bạn bè đang mở trang này và thêm bài, bạn sẽ thấy
-              badge{" "}
-              <span className="rounded-full bg-accent px-1.5 py-0.5 text-[9px] font-bold text-white">
-                Mới
-              </span>{" "}
-              trên bài đó.
-            </div>
-
-            {/* Playlist manager */}
             {selectedRoomId ? (
               <RoomPlaylistManager
                 key={selectedRoomId}
@@ -135,3 +120,4 @@ export default function MusicClientPage({
     </main>
   );
 }
+
