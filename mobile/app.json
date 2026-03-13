@@ -18,13 +18,20 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION"
+        "FOREGROUND_SERVICE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "ios": {
       "bundleIdentifier": "app.memorytree.mobile",
       "infoPlist": {
-        "UIBackgroundModes": ["location"],
+        "UIBackgroundModes": [
+          "location"
+        ],
         "NSLocationWhenInUseUsageDescription": "Memory Tree can su dung vi tri de hien thi room va theo doi hanh trinh cua ban.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Memory Tree can vi tri nen de cap nhat room chung ngay ca khi app o background."
       }
@@ -42,6 +49,11 @@
       ],
       "expo-secure-store",
       "expo-notifications"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "31114ae0-c2ad-4c50-97bb-b941978aca4b"
+      }
+    }
   }
 }

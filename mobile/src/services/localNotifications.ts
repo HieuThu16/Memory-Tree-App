@@ -74,8 +74,8 @@ export async function notifyFriendLocationUpdate({
 
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: `${friendName} vua cap nhat vi tri`,
-      body: `${friendName} vua chia se vi tri moi trong room ${roomName}.`,
+      title: `${friendName} vừa cập nhật vị trí`,
+      body: `${friendName} vừa chia sẻ vị trí mới trong room ${roomName}.`,
     },
     trigger: null,
   });

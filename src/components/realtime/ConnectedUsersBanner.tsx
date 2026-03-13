@@ -1,17 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useRealtimeStore } from "@/lib/stores/realtimeStore";
 import type { MemoryParticipant } from "@/lib/types";
 
 export default function ConnectedUsersBanner({
   participants,
   currentUserId,
-  roomId,
 }: {
   participants: MemoryParticipant[];
   currentUserId: string;
-  roomId: string;
 }) {
   const onlineUsers = useRealtimeStore((s) => s.users);
 
@@ -61,27 +58,6 @@ export default function ConnectedUsersBanner({
           </div>
         );
       })}
-
-      {/* Link to map */}
-      <Link
-        href="/location"
-        className="flex items-center gap-1 rounded-full border border-border bg-white/70 px-2.5 py-1 text-[10px] font-semibold text-text-muted transition hover:border-accent hover:text-accent"
-      >
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="10" r="3" />
-          <path d="M12 2a8 8 0 0 0-8 8c0 5.4 7.05 12.5 7.37 12.81a.9.9 0 0 0 1.26 0C13 22.5 20 15.4 20 10a8 8 0 0 0-8-8z" />
-        </svg>
-        Bản đồ
-      </Link>
     </div>
   );
 }

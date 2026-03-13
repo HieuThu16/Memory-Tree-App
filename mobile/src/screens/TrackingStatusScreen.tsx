@@ -1,5 +1,5 @@
 import type { User } from "@supabase/supabase-js";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -9,6 +9,7 @@ import {
   Text,
   TextInput,
   View,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatCoordinates } from "../services/addressing";
@@ -55,6 +56,15 @@ type Profile = {
     updatedAt: string;
     address: string | null;
   }[];
+  locationHistory: {
+    id: string;
+    userId: string;
+    roomId: string;
+    latitude: number;
+    longitude: number;
+    recordedAt: string;
+    address: string | null;
+  }[];
   latestRealtimeNotice: {
     id: string;
     message: string;
@@ -69,12 +79,12 @@ type Profile = {
 
 function formatTime(dateString: string | null) {
   if (!dateString) {
-    return "Chua co lan sync nao";
+    return "Chưa có";
   }
 
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) {
-    return "Chua co lan sync nao";
+    return "Chưa có";
   }
 
   return new Intl.DateTimeFormat("vi-VN", {
@@ -96,7 +106,9 @@ function initialsFromName(name: string) {
   );
 }
 
-const PRESET_LOCATION_LABELS = ["Tro", "Nha", "Truong"];
+const PRESET_LOCATION_LABELS = ["Trọ", "Nhà", "Trường"];
+
+type Tab = "personal" | "friends" | "history";
 
 export default function TrackingStatusScreen({
   profile,
@@ -104,6 +116,7 @@ export default function TrackingStatusScreen({
   onStop,
   onRefreshRooms,
   onSaveLocation,
+  onDeleteSavedLocation,
   onSignOut,
 }: {
   profile: Profile;
@@ -111,11 +124,16 @@ export default function TrackingStatusScreen({
   onStop: () => Promise<void>;
   onRefreshRooms: () => Promise<void>;
   onSaveLocation: (label: string, roomId: string) => Promise<void>;
+  onDeleteSavedLocation: (id: string) => Promise<void>;
   onSignOut: () => Promise<void>;
 }) {
+  const [activeTab, setActiveTab] = useState<Tab>("personal");
+  const [locationLabel, setLocationLabel] = useState("");
+  const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+
   const primaryRoom = profile.rooms[0] ?? null;
   const initials = initialsFromName(profile.displayName);
-  const [locationLabel, setLocationLabel] = useState("");
+
   const primaryRoomSavedLocations = useMemo(
     () =>
       primaryRoom
@@ -125,9 +143,24 @@ export default function TrackingStatusScreen({
         : [],
     [primaryRoom, profile.savedLocations],
   );
-  const visibleFriendLocations = useMemo(
-    () => profile.friendLocations.slice(0, 8),
-    [profile.friendLocations],
+
+  const myHistory = useMemo(
+    () => profile.locationHistory.filter((h) => h.userId === profile.user.id),
+    [profile.locationHistory, profile.user.id],
+  );
+
+  const selectedFriend = useMemo(
+    () =>
+      profile.friendLocations.find((f) => f.userId === selectedFriendId) || null,
+    [profile.friendLocations, selectedFriendId],
+  );
+
+  const selectedFriendHistory = useMemo(
+    () =>
+      selectedFriendId
+        ? profile.locationHistory.filter((h) => h.userId === selectedFriendId)
+        : [],
+    [profile.locationHistory, selectedFriendId],
   );
 
   const handleSaveCurrentLocation = async () => {
@@ -141,11 +174,13 @@ export default function TrackingStatusScreen({
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <View style={styles.container}>
+        {/* Header */}
         <View style={styles.topBar}>
           <Pressable onPress={() => void onSignOut()} style={styles.iconButton}>
             <Text style={styles.iconButtonText}>X</Text>
           </Pressable>
+          <Text style={styles.headerTitle}>MAP</Text>
           <Pressable
             onPress={() => void onRefreshRooms()}
             style={styles.iconButton}
@@ -154,362 +189,282 @@ export default function TrackingStatusScreen({
           </Pressable>
         </View>
 
-        <View style={styles.heroCard}>
-          <View style={styles.heroCopy}>
-            <Text style={styles.heroTitle}>
-              {profile.displayName.toUpperCase()}
-            </Text>
-            <Text style={styles.heroSubtitle}>
-              BFF ID: {primaryRoom?.inviteCode ?? profile.user.id.slice(0, 12)}
-            </Text>
-            <View style={styles.statusChipRow}>
-              <View style={styles.statusChip}>
-                <Text style={styles.statusChipText}>
-                  {profile.trackingEnabled
-                    ? "Dang chia se vi tri"
-                    : "Dang tat chia se"}
-                </Text>
-              </View>
-              <View style={[styles.statusChip, styles.mutedChip]}>
-                <Text style={styles.statusChipText}>
-                  Sync {formatTime(profile.lastSyncedAt)}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.avatarTile}>
-            <Text style={styles.avatarText}>{initials.toLowerCase()}</Text>
-          </View>
-        </View>
-
-        <View style={styles.quickBanner}>
-          <Text style={styles.quickBannerPlus}>+</Text>
-          <Text style={styles.quickBannerText}>
-            App Expo nay co reverse geocoding, realtime vi tri va thong bao khi
-            ban be cap nhat.
-          </Text>
-        </View>
-
-        {profile.latestRealtimeNotice ? (
-          <View style={styles.noticePulseCard}>
-            <Text style={styles.sectionTitle}>Thong bao room</Text>
-            <Text style={styles.bodyText}>
-              {profile.latestRealtimeNotice.message}
-            </Text>
-            <Text style={styles.subtleMetaText}>
-              {`Luc ${formatTime(profile.latestRealtimeNotice.createdAt)}`}
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={styles.addressCard}>
-          <Text style={styles.sectionTitle}>Dia chi hien tai</Text>
-          <Text style={styles.bodyText}>
-            {profile.currentLocation?.address ??
-              "Chua co vi tri da dong bo de doi sang dia chi."}
-          </Text>
-          {profile.currentLocation ? (
-            <Text style={styles.subtleMetaText}>
-              {formatCoordinates({
-                latitude: profile.currentLocation.latitude,
-                longitude: profile.currentLocation.longitude,
-              })}
-              {` • Sync ${formatTime(profile.currentLocation.updatedAt)}`}
-            </Text>
-          ) : (
-            <Text style={styles.subtleMetaText}>
-              Bat tracking hoac lam moi room de lay vi tri moi nhat.
-            </Text>
-          )}
-        </View>
-
-        {primaryRoom ? (
-          <View style={styles.addressCard}>
-            <Text style={styles.sectionTitle}>
-              Luu dia diem cho {primaryRoom.name}
-            </Text>
-            <Text style={styles.bodyText}>
-              Luu nhanh Tro, Nha, Truong hoac tu dat ten khac. App nay khong
-              tinh travel time.
-            </Text>
-            <View style={styles.presetRow}>
-              {PRESET_LOCATION_LABELS.map((preset) => (
-                <Pressable
-                  disabled={profile.savingLocation || !profile.currentLocation}
-                  key={preset}
-                  onPress={() => {
-                    void onSaveLocation(preset, primaryRoom.id);
-                  }}
-                  style={[
-                    styles.presetButton,
-                    (profile.savingLocation || !profile.currentLocation) &&
-                      styles.disabledButton,
-                  ]}
-                >
-                  <Text style={styles.presetButtonText}>{preset}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <TextInput
-              autoCapitalize="words"
-              onChangeText={setLocationLabel}
-              placeholder="Vi du: Quan ruot, Thu vien, Ca phe"
-              placeholderTextColor="#6f8898"
-              style={styles.locationInput}
-              value={locationLabel}
-            />
-            <Pressable
-              disabled={
-                profile.savingLocation ||
-                !profile.currentLocation ||
-                !locationLabel.trim()
-              }
-              onPress={() => {
-                void handleSaveCurrentLocation();
-              }}
+        {/* Tab Switcher */}
+        <View style={styles.tabBar}>
+          <Pressable
+            onPress={() => setActiveTab("personal")}
+            style={[styles.tab, activeTab === "personal" && styles.activeTab]}
+          >
+            <Text
               style={[
-                styles.secondarySplitButton,
-                (profile.savingLocation ||
-                  !profile.currentLocation ||
-                  !locationLabel.trim()) &&
-                  styles.disabledButton,
+                styles.tabText,
+                activeTab === "personal" && styles.activeTabText,
               ]}
             >
-              {profile.savingLocation ? (
-                <ActivityIndicator color="#ecf3fb" />
-              ) : (
-                <Text style={styles.secondarySplitButtonText}>
-                  Luu dia diem nay
-                </Text>
-              )}
-            </Pressable>
-          </View>
-        ) : null}
-
-        <View style={styles.friendLocationsCard}>
-          <Text style={styles.sectionTitle}>Ban be dang o dau</Text>
-          <Text style={styles.bodyText}>
-            Vi tri nay duoc cap nhat realtime tu bang user_locations trong room
-            chung.
-          </Text>
-          {visibleFriendLocations.length === 0 ? (
-            <Text style={styles.subtleMetaText}>
-              Chua thay cap nhat vi tri nao tu thanh vien khac.
-            </Text>
-          ) : (
-            visibleFriendLocations.map((location) => (
-              <View
-                key={`${location.roomId}:${location.userId}`}
-                style={styles.friendLocationRow}
-              >
-                <View style={styles.friendAvatarBadge}>
-                  <Text style={styles.friendAvatarBadgeText}>
-                    {initialsFromName(location.displayName).toLowerCase()}
-                  </Text>
-                </View>
-                <View style={styles.friendLocationContent}>
-                  <Text style={styles.savedLocationAddress}>
-                    {location.displayName}
-                  </Text>
-                  <Text style={styles.bodyText}>
-                    {location.address ??
-                      formatCoordinates({
-                        latitude: location.latitude,
-                        longitude: location.longitude,
-                      })}
-                  </Text>
-                  <Text style={styles.subtleMetaText}>
-                    {`${location.roomName} • ${formatTime(location.updatedAt)}`}
-                    {location.accuracy
-                      ? ` • sai so ${Math.round(location.accuracy)}m`
-                      : ""}
-                  </Text>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-
-        <View style={styles.journeyCard}>
-          <View style={styles.journeyMap}>
-            <View style={styles.routeLine} />
-            <View style={[styles.routeDot, styles.routeDotStart]} />
-            <View style={[styles.routeDot, styles.routeDotEnd]} />
-            <Text style={[styles.mapLabel, styles.mapLabelStart]}>Bat dau</Text>
-            <Text style={[styles.mapLabel, styles.mapLabelEnd]}>
-              {primaryRoom?.name ?? "Chua co room"}
-            </Text>
-          </View>
-
-          <View style={styles.journeyMeta}>
-            <Text style={styles.sectionTitle}>
-              {primaryRoom?.name ?? "Room vi tri"}
-            </Text>
-            <Text style={styles.bodyText}>
-              App mobile nay hien thi room, trang thai chia se nen, dia chi da
-              reverse geocode va playlist chung neu co.
-            </Text>
-            <View style={styles.journeyStats}>
-              <Text style={styles.statText}>{profile.roomIds.length} room</Text>
-              <Text style={styles.statText}>
-                {profile.trackingEnabled
-                  ? "GPS nen dang chay"
-                  : "GPS nen dang tat"}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.actionRow}>
-          <Pressable
-            disabled={profile.syncing || !profile.roomIds.length}
-            onPress={() =>
-              void (profile.trackingEnabled ? onStop() : onStart())
-            }
-            style={[
-              styles.splitButton,
-              (profile.syncing || !profile.roomIds.length) &&
-                styles.disabledButton,
-            ]}
-          >
-            <Text style={styles.splitButtonText}>
-              {profile.trackingEnabled ? "Tat chia se nen" : "Bat chia se nen"}
+              Cá nhân
             </Text>
           </Pressable>
           <Pressable
-            disabled={profile.syncing}
-            onPress={() => void onRefreshRooms()}
-            style={[
-              styles.secondarySplitButton,
-              profile.syncing && styles.disabledButton,
-            ]}
+            onPress={() => setActiveTab("friends")}
+            style={[styles.tab, activeTab === "friends" && styles.activeTab]}
           >
-            <Text style={styles.secondarySplitButtonText}>Lam moi room</Text>
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === "friends" && styles.activeTabText,
+              ]}
+            >
+              Bạn bè
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setActiveTab("history")}
+            style={[styles.tab, activeTab === "history" && styles.activeTab]}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === "history" && styles.activeTabText,
+              ]}
+            >
+              Lịch sử
+            </Text>
           </Pressable>
         </View>
 
-        <View style={styles.savedLocationsCard}>
-          <Text style={styles.sectionTitle}>Dia diem da luu</Text>
-          <Text style={styles.bodyText}>
-            {primaryRoom
-              ? `Danh sach dia diem cua room ${primaryRoom.name}.`
-              : "Join room truoc de luu va xem dia diem."}
-          </Text>
-
-          {primaryRoomSavedLocations.length === 0 ? (
-            <Text style={styles.subtleMetaText}>
-              Chua co dia diem nao duoc luu.
-            </Text>
-          ) : (
-            primaryRoomSavedLocations.map((location) => (
-              <View key={location.id} style={styles.savedLocationRow}>
-                <View style={styles.savedLocationBadge}>
-                  <Text style={styles.savedLocationBadgeText}>
-                    {location.label}
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {activeTab === "personal" && (
+            <View style={styles.tabContent}>
+              {/* Profile Card */}
+              <View style={styles.heroCard}>
+                <View style={styles.heroCopy}>
+                  <Text style={styles.heroTitle}>
+                    {profile.displayName.toUpperCase()}
                   </Text>
-                </View>
-                <View style={styles.savedLocationContent}>
-                  <Text style={styles.savedLocationAddress}>
-                    {location.address ??
-                      formatCoordinates({
-                        latitude: location.latitude,
-                        longitude: location.longitude,
-                      })}
-                  </Text>
-                  <Text style={styles.subtleMetaText}>
-                    {location.userId === profile.user.id
-                      ? "Ban luu"
-                      : "Thanh vien room luu"}
-                    {` • ${formatTime(location.createdAt)}`}
-                  </Text>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-
-        {profile.rooms.length === 0 ? (
-          <View style={[styles.feedCard, styles.emptyCard]}>
-            <Text style={styles.sectionTitle}>Chua co room nao</Text>
-            <Text style={styles.bodyText}>
-              Hay join mot room tu web truoc, sau do app mobile se dung room do
-              de gui vi tri nen that.
-            </Text>
-          </View>
-        ) : (
-          profile.rooms.map((room) => (
-            <View style={styles.feedCard} key={room.id}>
-              <View style={styles.feedCardHead}>
-                <View style={styles.feedAvatar}>
-                  <Text style={styles.feedAvatarText}>
-                    {initials.toLowerCase()}
-                  </Text>
-                </View>
-                <View style={styles.feedHeadCopy}>
-                  <Text style={styles.sectionTitle}>{room.name}</Text>
-                  <Text style={styles.bodyText}>
-                    {room.inviteCode
-                      ? `Ma ${room.inviteCode}`
-                      : "Chua co ma moi"}
-                    {` • ${room.memberCount} nguoi`}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.miniMapCard}>
-                <Text style={styles.miniMapPin}>{initials.toLowerCase()}</Text>
-              </View>
-
-              <View style={styles.feedActions}>
-                <Pressable
-                  onPress={() => void onRefreshRooms()}
-                  style={styles.pillButton}
-                >
-                  <Text style={styles.pillButtonText}>Lam moi</Text>
-                </Pressable>
-                {room.sharedPlaylistUrl ? (
-                  <Pressable
-                    onPress={() => {
-                      if (room.sharedPlaylistUrl) {
-                        void Linking.openURL(room.sharedPlaylistUrl);
-                      }
-                    }}
-                    style={[styles.pillButton, styles.darkPillButton]}
-                  >
-                    <Text style={styles.darkPillButtonText}>
-                      Playlist chung
-                    </Text>
-                  </Pressable>
-                ) : (
-                  <View style={[styles.pillButton, styles.mutedPillButton]}>
-                    <Text style={styles.mutedPillButtonText}>
-                      Chua co playlist
-                    </Text>
+                  <View style={styles.statusChipRow}>
+                    <View style={styles.statusChip}>
+                      <Text style={styles.statusChipText}>
+                        {profile.trackingEnabled ? "📡 Đang bật" : "💤 Đang tắt"}
+                      </Text>
+                    </View>
+                    <View style={[styles.statusChip, styles.mutedChip]}>
+                      <Text style={styles.statusChipText}>
+                        Sync {formatTime(profile.lastSyncedAt)}
+                      </Text>
+                    </View>
                   </View>
+                </View>
+                <View style={styles.avatarTile}>
+                  <Text style={styles.avatarText}>{initials.toLowerCase()}</Text>
+                </View>
+              </View>
+
+              {/* Current Location */}
+              <View style={styles.addressCard}>
+                <Text style={styles.sectionTitle}>Vị trí hiện tại</Text>
+                <Text style={styles.bodyText}>
+                  {profile.currentLocation?.address ?? "Đang lấy vị trí..."}
+                </Text>
+                {profile.currentLocation && (
+                  <Text style={styles.subtleMetaText}>
+                    {profile.currentLocation.latitude.toFixed(5)},{" "}
+                    {profile.currentLocation.longitude.toFixed(5)}
+                  </Text>
+                )}
+                <Pressable
+                  onPress={() =>
+                    void (profile.trackingEnabled ? onStop() : onStart())
+                  }
+                  style={[
+                    styles.actionButton,
+                    profile.trackingEnabled
+                      ? styles.secondaryButton
+                      : styles.primaryButton,
+                  ]}
+                >
+                  <Text
+                    style={
+                      profile.trackingEnabled
+                        ? styles.secondaryButtonText
+                        : styles.primaryButtonText
+                    }
+                  >
+                    {profile.trackingEnabled ? "Tắt GPS nền" : "Bật GPS nền"}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* CRUD Saved Locations */}
+              <View style={styles.addressCard}>
+                <Text style={styles.sectionTitle}>Lưu địa điểm</Text>
+                <View style={styles.presetRow}>
+                  {PRESET_LOCATION_LABELS.map((preset) => (
+                    <Pressable
+                      key={preset}
+                      onPress={() => void onSaveLocation(preset, primaryRoom?.id || "")}
+                      disabled={!profile.currentLocation || profile.savingLocation}
+                      style={[styles.presetButton, (!profile.currentLocation || profile.savingLocation) && styles.disabledButton]}
+                    >
+                      <Text style={styles.presetButtonText}>{preset}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={styles.inputRow}>
+                  <TextInput
+                    style={styles.locationInput}
+                    placeholder="Tên địa điểm khác..."
+                    placeholderTextColor="#6f8898"
+                    value={locationLabel}
+                    onChangeText={setLocationLabel}
+                  />
+                  <Pressable
+                    onPress={handleSaveCurrentLocation}
+                    disabled={!locationLabel.trim() || profile.savingLocation}
+                    style={[styles.saveButton, (!locationLabel.trim() || profile.savingLocation) && styles.disabledButton]}
+                  >
+                    {profile.savingLocation ? (
+                      <ActivityIndicator size="small" color="#07111f" />
+                    ) : (
+                      <Text style={styles.saveButtonText}>Lưu</Text>
+                    )}
+                  </Pressable>
+                </View>
+
+                <View style={styles.savedList}>
+                  {primaryRoomSavedLocations.map((loc) => (
+                    <View key={loc.id} style={styles.savedLocationRow}>
+                      <View style={styles.savedLocationContent}>
+                        <Text style={styles.savedLocationLabel}>{loc.label}</Text>
+                        <Text style={styles.savedLocationAddr} numberOfLines={1}>
+                          {loc.address || "Tọa độ: " + loc.latitude.toFixed(4)}
+                        </Text>
+                      </View>
+                      {loc.userId === profile.user.id && (
+                        <Pressable
+                          onPress={() => void onDeleteSavedLocation(loc.id)}
+                          style={styles.deleteButton}
+                        >
+                          <Text style={styles.deleteButtonText}>✕</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          )}
+
+          {activeTab === "friends" && (
+            <View style={styles.tabContent}>
+              <Text style={styles.sectionTitle}>Bạn bè trong Room</Text>
+              {profile.friendLocations.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateText}>Chưa có bạn bè nào đang online.</Text>
+                </View>
+              ) : (
+                profile.friendLocations.map((friend) => (
+                  <Pressable
+                    key={friend.userId}
+                    onPress={() => setSelectedFriendId(friend.userId)}
+                    style={styles.friendRow}
+                  >
+                    <View style={styles.friendAvatar}>
+                      <Text style={styles.friendAvatarText}>
+                        {initialsFromName(friend.displayName).toLowerCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.friendInfo}>
+                      <Text style={styles.friendName}>{friend.displayName}</Text>
+                      <Text style={styles.friendAddr} numberOfLines={1}>
+                        {friend.address || "Đang ở vị trí lạ"}
+                      </Text>
+                      <Text style={styles.subtleMetaText}>
+                        {formatTime(friend.updatedAt)}
+                      </Text>
+                    </View>
+                    <Text style={styles.chevron}>›</Text>
+                  </Pressable>
+                ))
+              )}
+            </View>
+          )}
+
+          {activeTab === "history" && (
+            <View style={styles.tabContent}>
+              <Text style={styles.sectionTitle}>Lịch sử di chuyển của bạn</Text>
+              {myHistory.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateText}>Chưa có lịch sử. Hãy di chuyển để bắt đầu ghi!</Text>
+                </View>
+              ) : (
+                myHistory.map((item) => (
+                  <View key={item.id} style={styles.historyRow}>
+                    <View style={styles.historyDot} />
+                    <View style={styles.historyContent}>
+                      <Text style={styles.historyTime}>{formatTime(item.recordedAt)}</Text>
+                      <Text style={styles.historyAddr}>
+                        {item.latitude.toFixed(5)}, {item.longitude.toFixed(5)}
+                      </Text>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          )}
+
+          {profile.statusMessage && (
+            <Text style={styles.statusText}>{profile.statusMessage}</Text>
+          )}
+        </ScrollView>
+      </View>
+
+      {/* Friend Detail Modal */}
+      <Modal
+        visible={!!selectedFriendId}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setSelectedFriendId(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{selectedFriend?.displayName || "Chi tiết"}</Text>
+              <Pressable onPress={() => setSelectedFriendId(null)} style={styles.closeModal}>
+                <Text style={styles.closeModalText}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.modalScroll}>
+              <View style={styles.modalSection}>
+                <Text style={styles.modalLabel}>📍 Vị trí hiện tại</Text>
+                <Text style={styles.modalValue}>{selectedFriend?.address || "Không rõ địa chỉ"}</Text>
+                <Text style={styles.subtleMetaText}>
+                  Cập nhật: {formatTime(selectedFriend?.updatedAt || null)}
+                </Text>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={styles.modalLabel}>🛤️ Lịch sử di chuyển</Text>
+                {selectedFriendHistory.length === 0 ? (
+                  <Text style={styles.emptyStateText}>Không có dữ liệu lịch sử.</Text>
+                ) : (
+                  selectedFriendHistory.map((h) => (
+                    <View key={h.id} style={styles.historyRow}>
+                      <View style={styles.historyDot} />
+                      <View style={styles.historyContent}>
+                        <Text style={styles.historyTime}>{formatTime(h.recordedAt)}</Text>
+                        <Text style={styles.historyAddr}>
+                          {h.latitude.toFixed(5)}, {h.longitude.toFixed(5)}
+                        </Text>
+                      </View>
+                    </View>
+                  ))
                 )}
               </View>
-            </View>
-          ))
-        )}
-
-        <View style={styles.noticeCard}>
-          <Text style={styles.sectionTitle}>Luu y native</Text>
-          <Text style={styles.noticeLine}>
-            Can cap quyen location Always tren iOS.
-          </Text>
-          <Text style={styles.noticeLine}>
-            Can tat battery optimization tren Android neu may bop nen.
-          </Text>
-          <Text style={styles.noticeLine}>
-            Background location chi on dinh tren dev build hoac native build.
-          </Text>
+            </ScrollView>
+          </View>
         </View>
-
-        {profile.statusMessage ? (
-          <Text style={styles.statusText}>{profile.statusMessage}</Text>
-        ) : null}
-      </ScrollView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -519,410 +474,372 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#05101c",
   },
-  scrollContent: {
-    paddingHorizontal: 18,
-    paddingBottom: 28,
-    gap: 18,
+  container: {
+    flex: 1,
   },
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 8,
+    alignItems: "center",
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  headerTitle: {
+    color: "#ecf3fb",
+    fontSize: 18,
+    fontWeight: "900",
+    letterSpacing: 2,
   },
   iconButton: {
     alignItems: "center",
     backgroundColor: "#122437",
-    borderRadius: 16,
-    height: 44,
+    borderRadius: 12,
+    height: 40,
     justifyContent: "center",
-    width: 44,
+    width: 40,
   },
   iconButtonText: {
     color: "#ecf3fb",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
+  },
+  tabBar: {
+    flexDirection: "row",
+    paddingHorizontal: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: "#17304d",
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  activeTab: {
+    borderBottomWidth: 3,
+    borderBottomColor: "#79d8ff",
+  },
+  tabText: {
+    color: "#6f8898",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  activeTabText: {
+    color: "#79d8ff",
+  },
+  scrollContent: {
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+  },
+  tabContent: {
+    gap: 20,
   },
   heroCard: {
     backgroundColor: "#0d1e31",
-    borderRadius: 28,
+    borderRadius: 24,
     flexDirection: "row",
-    gap: 16,
-    justifyContent: "space-between",
     padding: 20,
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   heroCopy: {
     flex: 1,
-    gap: 10,
+    gap: 8,
   },
   heroTitle: {
     color: "#ecf3fb",
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "900",
-    letterSpacing: 1.1,
-  },
-  heroSubtitle: {
-    color: "#9bb6c8",
-    fontSize: 14,
-    fontWeight: "600",
   },
   statusChipRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 8,
   },
   statusChip: {
     backgroundColor: "#17304d",
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   mutedChip: {
     backgroundColor: "#24394c",
   },
   statusChipText: {
     color: "#ecf3fb",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
   },
   avatarTile: {
     alignItems: "center",
     backgroundColor: "#79d8ff",
-    borderRadius: 26,
-    height: 84,
+    borderRadius: 20,
+    height: 64,
     justifyContent: "center",
-    width: 84,
+    width: 64,
   },
   avatarText: {
     color: "#07111f",
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: "900",
-  },
-  quickBanner: {
-    alignItems: "center",
-    backgroundColor: "#17304d",
-    borderRadius: 20,
-    flexDirection: "row",
-    gap: 12,
-    padding: 16,
-  },
-  quickBannerPlus: {
-    color: "#79d8ff",
-    fontSize: 22,
-    fontWeight: "900",
-  },
-  quickBannerText: {
-    color: "#cfe0ec",
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
   },
   addressCard: {
     backgroundColor: "#10233b",
     borderRadius: 24,
-    gap: 10,
     padding: 18,
-  },
-  noticePulseCard: {
-    backgroundColor: "#16324b",
-    borderRadius: 24,
-    gap: 10,
-    padding: 18,
-  },
-  subtleMetaText: {
-    color: "#8aa7bb",
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  presetRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  presetButton: {
-    alignItems: "center",
-    backgroundColor: "#214669",
-    borderRadius: 999,
-    justifyContent: "center",
-    minHeight: 42,
-    paddingHorizontal: 16,
-  },
-  presetButtonText: {
-    color: "#ecf3fb",
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  locationInput: {
-    backgroundColor: "#0c1b2d",
-    borderColor: "#27435f",
-    borderRadius: 16,
-    borderWidth: 1,
-    color: "#ecf3fb",
-    fontSize: 15,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  journeyCard: {
-    backgroundColor: "#0d1e31",
-    borderRadius: 28,
-    gap: 18,
-    padding: 20,
-  },
-  journeyMap: {
-    backgroundColor: "#0a1625",
-    borderRadius: 24,
-    height: 180,
-    overflow: "hidden",
-    position: "relative",
-  },
-  routeLine: {
-    backgroundColor: "#79d8ff",
-    borderRadius: 999,
-    height: 4,
-    left: 34,
-    position: "absolute",
-    right: 34,
-    top: 88,
-  },
-  routeDot: {
-    backgroundColor: "#ecf3fb",
-    borderRadius: 11,
-    height: 22,
-    position: "absolute",
-    top: 79,
-    width: 22,
-  },
-  routeDotStart: {
-    left: 26,
-  },
-  routeDotEnd: {
-    right: 26,
-  },
-  mapLabel: {
-    color: "#9bb6c8",
-    fontSize: 13,
-    fontWeight: "700",
-    position: "absolute",
-    top: 104,
-  },
-  mapLabelStart: {
-    left: 18,
-  },
-  mapLabelEnd: {
-    right: 18,
-  },
-  journeyMeta: {
-    gap: 10,
+    gap: 12,
   },
   sectionTitle: {
     color: "#ecf3fb",
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "800",
+    marginBottom: 4,
   },
   bodyText: {
     color: "#a7bfd1",
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 22,
   },
-  journeyStats: {
+  subtleMetaText: {
+    color: "#6f8898",
+    fontSize: 12,
+  },
+  actionButton: {
+    borderRadius: 16,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+  primaryButton: {
+    backgroundColor: "#79d8ff",
+  },
+  primaryButtonText: {
+    color: "#07111f",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  secondaryButton: {
+    backgroundColor: "#17304d",
+  },
+  secondaryButtonText: {
+    color: "#ecf3fb",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  presetRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: 10,
   },
-  statText: {
-    color: "#d8e8f4",
+  presetButton: {
+    backgroundColor: "#214669",
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  presetButtonText: {
+    color: "#ecf3fb",
     fontSize: 13,
     fontWeight: "700",
   },
-  actionRow: {
+  inputRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
   },
-  splitButton: {
-    alignItems: "center",
-    backgroundColor: "#79d8ff",
-    borderRadius: 18,
+  locationInput: {
     flex: 1,
-    justifyContent: "center",
-    minHeight: 54,
-    paddingHorizontal: 16,
+    backgroundColor: "#0c1b2d",
+    borderRadius: 12,
+    color: "#ecf3fb",
+    paddingHorizontal: 14,
+    height: 44,
   },
-  splitButtonText: {
+  saveButton: {
+    backgroundColor: "#79d8ff",
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    height: 44,
+    justifyContent: "center",
+  },
+  saveButtonText: {
     color: "#07111f",
-    fontSize: 15,
     fontWeight: "800",
   },
-  secondarySplitButton: {
-    alignItems: "center",
-    backgroundColor: "#17304d",
-    borderRadius: 18,
-    justifyContent: "center",
-    minHeight: 54,
-    paddingHorizontal: 16,
-  },
-  secondarySplitButtonText: {
-    color: "#ecf3fb",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  disabledButton: {
-    opacity: 0.55,
-  },
-  feedCard: {
-    backgroundColor: "#0d1e31",
-    borderRadius: 24,
-    gap: 16,
-    padding: 18,
-  },
-  emptyCard: {
-    minHeight: 140,
-    justifyContent: "center",
-  },
-  savedLocationsCard: {
-    backgroundColor: "#0d1e31",
-    borderRadius: 24,
-    gap: 12,
-    padding: 18,
-  },
-  friendLocationsCard: {
-    backgroundColor: "#0d1e31",
-    borderRadius: 24,
-    gap: 12,
-    padding: 18,
+  savedList: {
+    marginTop: 10,
+    gap: 10,
   },
   savedLocationRow: {
-    alignItems: "flex-start",
-    backgroundColor: "#10233b",
-    borderRadius: 18,
     flexDirection: "row",
-    gap: 12,
-    padding: 14,
-  },
-  savedLocationBadge: {
-    backgroundColor: "#79d8ff",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  savedLocationBadgeText: {
-    color: "#07111f",
-    fontSize: 11,
-    fontWeight: "800",
-    textTransform: "uppercase",
+    backgroundColor: "#17304d",
+    borderRadius: 16,
+    padding: 12,
+    alignItems: "center",
   },
   savedLocationContent: {
     flex: 1,
-    gap: 4,
   },
-  savedLocationAddress: {
-    color: "#e7f0f7",
-    fontSize: 14,
-    fontWeight: "600",
-    lineHeight: 20,
+  savedLocationLabel: {
+    color: "#ecf3fb",
+    fontSize: 15,
+    fontWeight: "700",
   },
-  friendLocationRow: {
-    alignItems: "flex-start",
+  savedLocationAddr: {
+    color: "#6f8898",
+    fontSize: 12,
+  },
+  deleteButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: "#0d1e31",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteButtonText: {
+    color: "#ff5e5e",
+    fontWeight: "800",
+  },
+  friendRow: {
+    flexDirection: "row",
     backgroundColor: "#10233b",
-    borderRadius: 18,
-    flexDirection: "row",
-    gap: 12,
-    padding: 14,
-  },
-  friendAvatarBadge: {
+    borderRadius: 20,
+    padding: 16,
     alignItems: "center",
-    backgroundColor: "#79d8ff",
-    borderRadius: 999,
-    height: 42,
-    justifyContent: "center",
-    width: 42,
+    marginBottom: 12,
   },
-  friendAvatarBadgeText: {
-    color: "#07111f",
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  friendLocationContent: {
-    flex: 1,
-    gap: 4,
-  },
-  feedCardHead: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  feedAvatar: {
-    alignItems: "center",
-    backgroundColor: "#1a344e",
-    borderRadius: 16,
-    height: 48,
-    justifyContent: "center",
+  friendAvatar: {
     width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: "#79d8ff",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  feedAvatarText: {
-    color: "#79d8ff",
+  friendAvatarText: {
+    color: "#07111f",
     fontSize: 16,
     fontWeight: "900",
   },
-  feedHeadCopy: {
+  friendInfo: {
     flex: 1,
-    gap: 4,
+    marginLeft: 14,
   },
-  miniMapCard: {
-    alignItems: "center",
-    backgroundColor: "#091726",
-    borderRadius: 18,
-    height: 120,
-    justifyContent: "center",
-  },
-  miniMapPin: {
-    color: "#79d8ff",
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  feedActions: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  pillButton: {
-    backgroundColor: "#eaf2f8",
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  pillButtonText: {
-    color: "#07111f",
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  darkPillButton: {
-    backgroundColor: "#183554",
-  },
-  darkPillButtonText: {
+  friendName: {
     color: "#ecf3fb",
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: "800",
   },
-  mutedPillButton: {
-    backgroundColor: "#22384b",
-  },
-  mutedPillButtonText: {
-    color: "#a6bfce",
+  friendAddr: {
+    color: "#a7bfd1",
     fontSize: 13,
+    marginTop: 2,
+  },
+  chevron: {
+    color: "#6f8898",
+    fontSize: 24,
+    marginLeft: 10,
+  },
+  historyRow: {
+    flexDirection: "row",
+    paddingLeft: 4,
+    marginBottom: 16,
+  },
+  historyDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#79d8ff",
+    marginTop: 6,
+    marginRight: 16,
+  },
+  historyContent: {
+    flex: 1,
+    borderLeftWidth: 1,
+    borderLeftColor: "#17304d",
+    paddingLeft: 20,
+    marginLeft: -21,
+    paddingBottom: 4,
+  },
+  historyTime: {
+    color: "#ecf3fb",
+    fontSize: 14,
     fontWeight: "700",
   },
-  noticeCard: {
-    backgroundColor: "#122437",
-    borderRadius: 24,
-    gap: 8,
-    padding: 18,
+  historyAddr: {
+    color: "#6f8898",
+    fontSize: 12,
+    marginTop: 4,
   },
-  noticeLine: {
-    color: "#cfe0ec",
+  emptyState: {
+    padding: 40,
+    alignItems: "center",
+  },
+  emptyStateText: {
+    color: "#6f8898",
+    textAlign: "center",
     fontSize: 14,
-    lineHeight: 20,
   },
   statusText: {
-    color: "#dbe8f2",
-    fontSize: 14,
-    lineHeight: 20,
+    color: "#79d8ff",
     textAlign: "center",
+    marginTop: 20,
+    fontSize: 13,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#05101c",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    minHeight: "80%",
+    padding: 24,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  modalTitle: {
+    color: "#ecf3fb",
+    fontSize: 22,
+    fontWeight: "900",
+  },
+  closeModal: {
+    backgroundColor: "#17304d",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  closeModalText: {
+    color: "#ecf3fb",
+    fontSize: 16,
+  },
+  modalScroll: {
+    paddingBottom: 40,
+  },
+  modalSection: {
+    marginBottom: 28,
+  },
+  modalLabel: {
+    color: "#79d8ff",
+    fontSize: 14,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+  modalValue: {
+    color: "#ecf3fb",
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 6,
   },
 });

@@ -25,9 +25,13 @@ export default function LoginScreen({
   const [loading, setLoading] = useState<"google" | "magic" | null>(null);
 
   const isExpoGo = Constants.executionEnvironment === "storeClient";
+
+  // Create a consistent redirect URI
   const redirectTo = makeRedirectUri({
+    scheme: "memorytree",
     path: "auth/callback",
-    native: "memorytree://auth/callback",
+    // In Expo Go, it will try exp://... or memorytree:// if configured
+    // In APK/Production, it will use memorytree://
   });
 
   const handleGoogle = async () => {
@@ -49,7 +53,7 @@ export default function LoginScreen({
     }
 
     if (!data.url) {
-      setMessage("Khong tao duoc URL dang nhap Google.");
+      setMessage("Không tạo được URL đăng nhập Google.");
       setLoading(null);
       return;
     }
@@ -64,7 +68,7 @@ export default function LoginScreen({
       const callback = parseAuthCallback(result.url);
 
       if (!callback) {
-        setMessage("Khong lay duoc du lieu dang nhap tu callback cua MAP.");
+        setMessage("Không lấy được dữ liệu đăng nhập từ callback của MAP.");
       } else if (callback.type === "code") {
         const { error: exchangeError } =
           await supabase.auth.exchangeCodeForSession(callback.code);
@@ -114,9 +118,9 @@ export default function LoginScreen({
     <View style={styles.screen}>
       <View style={styles.card}>
         <Text style={styles.eyebrow}>MAP</Text>
-        <Text style={styles.title}>Dang nhap app MAP</Text>
+        <Text style={styles.title}>Đăng nhập app MAP</Text>
         <Text style={styles.supportText}>
-          Dang nhap xong se quay lai giao dien app MAP tren dien thoai, khong ve
+          Đăng nhập xong sẽ quay lại giao diện app MAP trên điện thoại, không về
           web Vercel.
         </Text>
 
@@ -129,7 +133,7 @@ export default function LoginScreen({
           {loading === "google" ? (
             <ActivityIndicator color="#07111f" />
           ) : (
-            <Text style={styles.primaryButtonText}>Dang nhap voi Google</Text>
+            <Text style={styles.primaryButtonText}>Đăng nhập với Google</Text>
           )}
         </Pressable>
 
@@ -157,11 +161,22 @@ export default function LoginScreen({
           {loading === "magic" ? (
             <ActivityIndicator color="#ecf3fb" />
           ) : (
-            <Text style={styles.secondaryButtonText}>Gui Magic Link</Text>
+            <Text style={styles.secondaryButtonText}>Gửi Magic Link</Text>
           )}
         </Pressable>
 
         {message ? <Text style={styles.statusText}>{message}</Text> : null}
+
+        <View style={styles.debugBox}>
+          <Text style={styles.debugTitle}>Debug Redirect URI:</Text>
+          <Text style={styles.debugUri} selectable={true}>
+            {redirectTo}
+          </Text>
+          <Text style={styles.debugNote}>
+            Copy URL trên vào phần "Redirect URLs" trong Supabase Dashboard nếu
+            login xong bị nhảy về web.
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -244,8 +259,33 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
   },
   statusText: {
-    color: "#d6e6f4",
+    color: "#dee9f3",
     fontSize: 14,
     lineHeight: 20,
+  },
+  debugBox: {
+    marginTop: 10,
+    padding: 12,
+    backgroundColor: "#05101c",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#1a344e",
+    gap: 6,
+  },
+  debugTitle: {
+    color: "#79d8ff",
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  debugUri: {
+    color: "#a7bfd1",
+    fontSize: 10,
+    fontFamily: "monospace",
+  },
+  debugNote: {
+    color: "#6f8898",
+    fontSize: 10,
+    fontStyle: "italic",
   },
 });

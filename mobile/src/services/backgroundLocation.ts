@@ -50,13 +50,13 @@ export async function configureBackgroundLocation(identity: TrackingIdentity) {
   const foregroundPermission =
     await Location.requestForegroundPermissionsAsync();
   if (foregroundPermission.status !== "granted") {
-    throw new Error("Chua duoc cap quyen vi tri foreground.");
+    throw new Error("Chưa được cấp quyền vị trí foreground.");
   }
 
   const backgroundPermission =
     await Location.requestBackgroundPermissionsAsync();
   if (backgroundPermission.status !== "granted") {
-    throw new Error("Chua duoc cap quyen vi tri background.");
+    throw new Error("Chưa được cấp quyền vị trí background.");
   }
 }
 
@@ -90,8 +90,8 @@ export async function startBackgroundTracking(identity: TrackingIdentity) {
       deferredUpdatesInterval: 0,
       distanceInterval: 10,
       foregroundService: {
-        notificationTitle: "Memory Tree dang chia se vi tri",
-        notificationBody: "Ung dung dang dong bo vi tri nen cho room chung.",
+        notificationTitle: "Memory Tree đang chia sẻ vị trí",
+        notificationBody: "Ứng dụng đang đồng bộ vị trí nền cho room chung.",
       },
       pausesUpdatesAutomatically: false,
       showsBackgroundLocationIndicator: true,

@@ -140,3 +140,16 @@ export type MusicSearchResult = {
   external_url: string | null;
   duration_ms: number | null;
 };
+
+export type RoomPlanRecord = {
+  id: string;
+  room_id: string;
+  added_by: string;
+  title: string;
+  description: string | null;
+  is_completed: boolean;
+  completed_by: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};

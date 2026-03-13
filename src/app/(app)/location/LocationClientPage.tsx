@@ -47,6 +47,18 @@ export default function LocationClientPage({
               <p>npm run mobile:sync</p>
             </div>
           </div>
+
+          <div className="mt-8">
+            <a
+              href="memorytree://auth/callback"
+              className="flex w-full items-center justify-center rounded-2xl bg-accent py-4 text-sm font-bold text-white shadow-lg transition-transform active:scale-95"
+            >
+              Mở App MAP (Deep Link)
+            </a>
+            <p className="mt-3 text-xs text-text-secondary">
+              Nếu login thành công nhưng vẫn ở trang này, bấm nút trên để quay lại app.
+            </p>
+          </div>
         </div>
       </div>
     </main>

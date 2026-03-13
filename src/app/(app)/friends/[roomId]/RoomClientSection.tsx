@@ -42,7 +42,9 @@ export default function RoomClientSection({
       ) ?? null,
     [currentUserId, participants],
   );
-  const [viewMode, setViewMode] = useState<"tree" | "gallery">("tree");
+  const [memoryViewMode, setMemoryViewMode] = useState<"tree" | "gallery">(
+    "tree",
+  );
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
@@ -109,10 +111,8 @@ export default function RoomClientSection({
         <ConnectedUsersBanner
           participants={participants}
           currentUserId={currentUserId}
-          roomId={roomId}
         />
 
-        {/* Search & View Mode Toggle */}
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <input
@@ -128,9 +128,9 @@ export default function RoomClientSection({
           </div>
           <div className="flex items-center rounded-xl border border-border bg-white/60 p-1 backdrop-blur-sm">
             <button
-              onClick={() => setViewMode("tree")}
+              onClick={() => setMemoryViewMode("tree")}
               className={`rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
-                viewMode === "tree"
+                memoryViewMode === "tree"
                   ? "bg-accent text-white shadow-sm"
                   : "text-text-secondary hover:bg-white"
               }`}
@@ -139,9 +139,9 @@ export default function RoomClientSection({
               🌳
             </button>
             <button
-              onClick={() => setViewMode("gallery")}
+              onClick={() => setMemoryViewMode("gallery")}
               className={`rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
-                viewMode === "gallery"
+                memoryViewMode === "gallery"
                   ? "bg-accent text-white shadow-sm"
                   : "text-text-secondary hover:bg-white"
               }`}
@@ -155,7 +155,7 @@ export default function RoomClientSection({
 
       {/* Content View */}
       <div className="mt-3 rounded-2xl bg-white/58 p-1.5 sm:p-2 min-h-[50vh]">
-        <div className={viewMode === "tree" ? "" : "hidden"}>
+        <div className={memoryViewMode === "tree" ? "" : "hidden"}>
           <MemoryTree
             memories={filteredMemories}
             participants={participants}
@@ -163,7 +163,7 @@ export default function RoomClientSection({
             isTwoPerson={isTwoPerson}
           />
         </div>
-        {viewMode === "gallery" && (
+        {memoryViewMode === "gallery" && (
           <MemoryGallery
             memories={filteredMemories}
             participantsByUserId={participantsByUserId}

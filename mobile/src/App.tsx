@@ -63,6 +63,16 @@ type MobileSavedLocation = {
   address: string | null;
 };
 
+type MobileLocationHistory = {
+  id: string;
+  userId: string;
+  roomId: string;
+  latitude: number;
+  longitude: number;
+  recordedAt: string;
+  address: string | null;
+};
+
 type MobileFriendLocation = {
   roomId: string;
   roomName: string;
@@ -90,6 +100,7 @@ type MobileUserContext = {
   currentLocation: MobileCurrentLocation | null;
   savedLocations: MobileSavedLocation[];
   friendLocations: MobileFriendLocation[];
+  locationHistory: MobileLocationHistory[];
   latestRealtimeNotice: MobileRealtimeNotice | null;
   trackingEnabled: boolean;
   savingLocation: boolean;
@@ -150,6 +161,9 @@ export default function App() {
   const [friendLocations, setFriendLocations] = useState<
     MobileFriendLocation[]
   >([]);
+  const [locationHistory, setLocationHistory] = useState<
+    MobileLocationHistory[]
+  >([]);
   const [latestRealtimeNotice, setLatestRealtimeNotice] =
     useState<MobileRealtimeNotice | null>(null);
   const [trackingEnabled, setTrackingEnabled] = useState(false);
@@ -193,6 +207,40 @@ export default function App() {
 
     setSavedLocations(hydratedLocations);
   }, []);
+
+  const refreshLocationHistory = useCallback(
+    async (roomIdsToLoad: string[]) => {
+      if (!roomIdsToLoad.length) {
+        setLocationHistory([]);
+        return;
+      }
+
+      const { data, error } = await mobileSupabase
+        .from("location_history")
+        .select("id, user_id, room_id, lat, lng, recorded_at")
+        .in("room_id", roomIdsToLoad)
+        .order("recorded_at", { ascending: false })
+        .limit(100);
+
+      if (error) {
+        setStatusMessage(error.message);
+        return;
+      }
+
+      const hydratedHistory = (data ?? []).map((item) => ({
+        id: item.id,
+        userId: item.user_id,
+        roomId: item.room_id,
+        latitude: item.lat,
+        longitude: item.lng,
+        recordedAt: item.recorded_at,
+        address: null, // Reverse geocoding for history might be too heavy for list, fetch on demand or leave null
+      }));
+
+      setLocationHistory(hydratedHistory);
+    },
+    [],
+  );
 
   const refreshRoomContext = useCallback(
     async (activeSession: Session) => {
@@ -346,7 +394,7 @@ export default function App() {
               memberProfile?.displayName ??
               (member.user_id === activeSession.user.id
                 ? nextDisplayName
-                : `Thanh vien ${member.user_id.slice(0, 6)}`),
+                : `Thành viên ${member.user_id.slice(0, 6)}`),
             avatarUrl: memberProfile?.avatarUrl ?? null,
           };
         }),
@@ -388,7 +436,7 @@ export default function App() {
               userId: item.user_id,
               displayName:
                 memberProfile?.displayName ??
-                `Thanh vien ${item.user_id.slice(0, 6)}`,
+                `Thành viên ${item.user_id.slice(0, 6)}`,
               avatarUrl: memberProfile?.avatarUrl ?? null,
               latitude: item.lat,
               longitude: item.lng,
@@ -403,9 +451,12 @@ export default function App() {
       );
 
       setFriendLocations(nextFriendLocations);
-      await refreshSavedLocations(uniqueRoomIds);
+      await Promise.all([
+        refreshSavedLocations(uniqueRoomIds),
+        refreshLocationHistory(uniqueRoomIds),
+      ]);
     },
-    [refreshSavedLocations],
+    [refreshSavedLocations, refreshLocationHistory],
   );
 
   const handleIncomingUrl = useCallback(async (url: string) => {
@@ -571,11 +622,11 @@ export default function App() {
       }
 
       lastRealtimeNoticeKeyRef.current = noticeKey;
-      const friendName = memberNameById.get(changedUserId) ?? "Ban cung room";
+      const friendName = memberNameById.get(changedUserId) ?? "Bạn cùng room";
       const roomName = roomNameById.get(roomId) ?? "Memory Room";
       const nextNotice = {
         id: noticeKey,
-        message: `${friendName} vua cap nhat vi tri o ${roomName}.`,
+        message: `${friendName} vừa cập nhật vị trí ở ${roomName}.`,
         createdAt: updatedAt,
       };
 
@@ -627,7 +678,7 @@ export default function App() {
       )
       .subscribe((status) => {
         if (status === "CHANNEL_ERROR") {
-          setStatusMessage("Khong the ket noi realtime room tren mobile.");
+          setStatusMessage("Không thể kết nối realtime room trên mobile.");
         }
       });
 
@@ -656,6 +707,7 @@ export default function App() {
       currentLocation,
       savedLocations,
       friendLocations,
+      locationHistory,
       latestRealtimeNotice,
       trackingEnabled,
       savingLocation,
@@ -665,6 +717,7 @@ export default function App() {
   }, [
     currentLocation,
     friendLocations,
+    locationHistory,
     latestRealtimeNotice,
     profile,
     roomIds,
@@ -692,12 +745,12 @@ export default function App() {
       });
       await refreshRoomContext(session);
       setTrackingEnabled(true);
-      setStatusMessage("Da bat background tracking tren thiet bi nay.");
+      setStatusMessage("Đã bật background tracking trên thiết bị này.");
     } catch (error) {
       setStatusMessage(
         error instanceof Error
           ? error.message
-          : "Khong the bat background tracking.",
+          : "Không thể bật background tracking.",
       );
     } finally {
       setSyncing(false);
@@ -714,12 +767,12 @@ export default function App() {
         await refreshRoomContext(session);
       }
       setTrackingEnabled(false);
-      setStatusMessage("Da tat background tracking tren thiet bi nay.");
+      setStatusMessage("Đã tắt background tracking trên thiết bị này.");
     } catch (error) {
       setStatusMessage(
         error instanceof Error
           ? error.message
-          : "Khong the tat background tracking.",
+          : "Không thể tắt background tracking.",
       );
     } finally {
       setSyncing(false);
@@ -759,13 +812,13 @@ export default function App() {
 
   const handleSaveLocation = async (label: string, roomId: string) => {
     if (!session || !currentLocation) {
-      setStatusMessage("Chua co vi tri nao de luu.");
+      setStatusMessage("Chưa có vị trí nào để lưu.");
       return;
     }
 
     const trimmedLabel = label.trim();
     if (!trimmedLabel) {
-      setStatusMessage("Nhap ten dia diem truoc khi luu.");
+      setStatusMessage("Nhập tên địa điểm trước khi lưu.");
       return;
     }
 
@@ -786,7 +839,7 @@ export default function App() {
         .single();
 
       if (error || !data) {
-        throw new Error(error?.message ?? "Khong the luu dia diem.");
+        throw new Error(error?.message ?? "Không thể lưu địa điểm.");
       }
 
       setSavedLocations((current) => [
@@ -800,17 +853,35 @@ export default function App() {
           createdAt: data.created_at,
           address:
             currentLocation.address ??
-            `Toa do ${data.lat.toFixed(5)}, ${data.lng.toFixed(5)}`,
+            `Tọa độ ${data.lat.toFixed(5)}, ${data.lng.toFixed(5)}`,
         },
         ...current,
       ]);
-      setStatusMessage("Da luu dia diem nay vao room.");
+      setStatusMessage("Đã lưu địa điểm này vào room.");
     } catch (error) {
       setStatusMessage(
-        error instanceof Error ? error.message : "Khong the luu dia diem.",
+        error instanceof Error ? error.message : "Không thể lưu địa điểm.",
       );
     } finally {
       setSavingLocation(false);
+    }
+  };
+
+  const handleDeleteSavedLocation = async (id: string) => {
+    if (!session) return;
+
+    setStatusMessage(null);
+    const { error } = await mobileSupabase
+      .from("saved_locations")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", session.user.id);
+
+    if (error) {
+      setStatusMessage(error.message);
+    } else {
+      setSavedLocations((curr) => curr.filter((l) => l.id !== id));
+      setStatusMessage("Đã xóa địa điểm.");
     }
   };
 
@@ -829,6 +900,7 @@ export default function App() {
               roomIds: context.roomIds,
               savedLocations: context.savedLocations,
               friendLocations: context.friendLocations,
+              locationHistory: context.locationHistory,
               latestRealtimeNotice: context.latestRealtimeNotice,
               lastSyncedAt: context.profile.lastSyncedAt,
               trackingEnabled: context.trackingEnabled,
@@ -840,6 +912,7 @@ export default function App() {
             onStop={handleStop}
             onRefreshRooms={handleRefreshRooms}
             onSaveLocation={handleSaveLocation}
+            onDeleteSavedLocation={handleDeleteSavedLocation}
             onSignOut={handleSignOut}
           />
         ) : (

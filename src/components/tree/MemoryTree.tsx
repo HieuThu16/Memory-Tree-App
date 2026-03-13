@@ -24,6 +24,7 @@ import TreeBranch from "./TreeBranch";
 import TreeNode from "./TreeNode";
 import TreeParticles from "./TreeParticles";
 import MemoryMediaDisplay from "../memory/MemoryMediaDisplay";
+import BackButton from "../ui/BackButton";
 import {
   TREE_NODE_SIZES,
   type MemoryNode,
@@ -730,24 +731,17 @@ export default function MemoryTree({
       {/* Detail Popup - shown on click (immediately for 2-person rooms) */}
       {isDetailOpen && selectedMemory ? (
         <div
-          className="fixed left-0 top-0 z-[9999] h-[100dvh] w-screen bg-white"
+          className="fixed inset-0 z-[9999] h-[100dvh] w-screen overflow-hidden bg-white"
           onClick={() => setIsDetailOpen(false)}
         >
           <div
-            className="glass-card flex h-full min-h-0 w-full flex-col overflow-hidden rounded-none"
+            className="glass-card flex h-full w-full flex-col rounded-none"
             onClick={(event) => event.stopPropagation()}
           >
             {/* Popup Header */}
             <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
               <div className="flex min-w-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsDetailOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-accent hover:text-accent"
-                  title="Quay lại"
-                >
-                  ←
-                </button>
+                <BackButton onClick={() => setIsDetailOpen(false)} />
                 <h3 className="truncate text-base font-semibold text-foreground sm:text-lg">
                   {selectedMemory.title}
                 </h3>
@@ -800,7 +794,7 @@ export default function MemoryTree({
             </div>
 
             {/* Popup Body */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 sm:py-4 [-webkit-overflow-scrolling:touch]">
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 touch-pan-y [overscroll-behavior:contain] [-webkit-overflow-scrolling:touch] sm:px-5 sm:py-4">
               {/* Meta info row */}
               <div className="flex flex-wrap items-center gap-1 text-[10px] sm:gap-1.5">
                 <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-text-secondary">

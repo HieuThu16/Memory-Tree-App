@@ -48,6 +48,26 @@ const tabs = [
     ),
   },
   {
+    href: "/plans",
+    label: "Dự định",
+    emoji: "✅",
+    icon: (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M9 11l3 3L22 4" />
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+      </svg>
+    ),
+  },
+  {
     href: "/music",
     label: "Nhạc",
     emoji: "🎵",
@@ -75,7 +95,7 @@ export default function TabNav() {
 
   return (
     <nav className="fixed inset-x-0 bottom-2 z-40 mx-auto w-[min(380px,calc(100vw-1rem))]">
-      <div className="mx-auto grid grid-cols-3 gap-0.5 rounded-2xl border border-white/60 bg-white/92 p-1 shadow-[0_14px_32px_-20px_rgba(71,54,126,0.36)] backdrop-blur-md">
+      <div className="mx-auto grid grid-cols-4 gap-0.5 rounded-2xl border border-white/60 bg-white/92 p-1 shadow-[0_14px_32px_-20px_rgba(71,54,126,0.36)] backdrop-blur-md">
         {tabs.map((tab) => {
           const isActive =
             tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);

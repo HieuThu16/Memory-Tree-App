@@ -9,8 +9,8 @@ import { getRoomMemories } from "@/lib/supabase/queries/memories";
 import RealtimeRoomProvider from "@/components/realtime/RealtimeRoomProvider";
 import LiveCursor from "@/components/realtime/LiveCursor";
 import PresenceAvatars from "@/components/realtime/PresenceAvatars";
-import Link from "next/link";
 import InviteLinkButton from "@/components/room/InviteLinkButton";
+import BackButton from "@/components/ui/BackButton";
 
 export const dynamic = "force-dynamic";
 
@@ -74,25 +74,7 @@ export default async function RoomPage({
           {/* Compact inline header */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <Link
-                href="/friends"
-                prefetch={true}
-                className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-border bg-white/80 text-text-secondary transition hover:border-accent hover:text-accent"
-                title="Quay lại"
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="15 18 9 12 15 6" />
-                </svg>
-              </Link>
+              <BackButton href="/friends" className="text-[11px]" />
               <div className="min-w-0">
                 <h1 className="truncate text-sm font-semibold text-foreground sm:text-base">
                   🌿 {room.name || "Khu vườn chung"}

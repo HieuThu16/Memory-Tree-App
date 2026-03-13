@@ -20,6 +20,11 @@ import SearchPanel from "./playlist-manager/SearchPanel";
 import SearchResultRow from "./playlist-manager/SearchResultRow";
 import TrackRow from "./playlist-manager/TrackRow";
 import type { PlaybackMode } from "./playlist-manager/types";
+import BackButton from "@/components/ui/BackButton";
+import { getSharedAudio } from "@/lib/music/sharedAudio";
+
+type DiscoveryTab = "search" | "trending";
+type TrendingCountry = "vn" | "us" | "kr" | "jp" | "gb";
 
 export default function RoomPlaylistManager({
   roomId,
@@ -39,7 +44,14 @@ export default function RoomPlaylistManager({
   const [editingDescription, setEditingDescription] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<MusicSearchResult[]>([]);
+  const [trendingResults, setTrendingResults] = useState<MusicSearchResult[]>(
+    [],
+  );
+  const [activeDiscoveryTab, setActiveDiscoveryTab] =
+    useState<DiscoveryTab>("search");
+  const [trendingCountry, setTrendingCountry] = useState<TrendingCountry>("vn");
   const [isSearching, setIsSearching] = useState(false);
+  const [isTrendingLoading, setIsTrendingLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [playingUrl, setPlayingUrl] = useState<string | null>(null);
   const [currentTrackId, setCurrentTrackId] = useState<string | null>(null);
@@ -51,6 +63,9 @@ export default function RoomPlaylistManager({
   const [isPickPlaylistOpen, setIsPickPlaylistOpen] = useState(false);
   const [pendingTrackToAdd, setPendingTrackToAdd] =
     useState<MusicSearchResult | null>(null);
+  const [selectedTargetPlaylistId, setSelectedTargetPlaylistId] = useState<
+    string | null
+  >(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -174,11 +189,10 @@ export default function RoomPlaylistManager({
   }, [selectedPlaylistId]);
 
   useEffect(() => {
-    const audio = new Audio();
+    const audio = getSharedAudio();
     audioRef.current = audio;
 
     return () => {
-      audio.pause();
       audioRef.current = null;
     };
   }, []);
@@ -286,7 +300,7 @@ export default function RoomPlaylistManager({
 
   const handlePlayPlaylistTrack = (track: PlaylistTrackRecord) => {
     if (!track.preview_url) {
-      addToast("Bài này không có preview để phát.", "error");
+      addToast("Bài này hiện chưa có nguồn phát trực tiếp trong app.", "error");
       return;
     }
 
@@ -430,6 +444,29 @@ export default function RoomPlaylistManager({
     return payload.data ?? [];
   };
 
+  const fetchTrendingMusic = async (country: TrendingCountry) => {
+    const response = await fetch(`/api/music/trending?country=${country}`);
+
+    if (!response.ok) {
+      throw new Error("MUSIC_TRENDING_FAILED");
+    }
+
+    const payload = (await response.json()) as { data?: MusicSearchResult[] };
+    return payload.data ?? [];
+  };
+
+  const clearSearchResults = () => {
+    if (activeDiscoveryTab === "trending") {
+      setTrendingResults([]);
+      return;
+    }
+
+    setSearchResults([]);
+  };
+
+  const visibleResults =
+    activeDiscoveryTab === "trending" ? trendingResults : searchResults;
+
   const handleSearch = async (queryOverride?: string) => {
     const resolvedQuery = (queryOverride ?? searchQuery).trim();
 
@@ -444,10 +481,61 @@ export default function RoomPlaylistManager({
     try {
       const items = await fetchMusic(resolvedQuery);
       setSearchResults(items);
+      setActiveDiscoveryTab("search");
     } catch {
       addToast("Không tìm được nhạc từ các nguồn hiện có.", "error");
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleLoadTrending = async () => {
+    if (isTrendingLoading) {
+      return;
+    }
+
+    setIsTrendingLoading(true);
+
+    try {
+      const items = await fetchTrendingMusic(trendingCountry);
+      setTrendingResults(items);
+      if (!isSearchResultsOpen) {
+        setIsSearchResultsOpen(true);
+      }
+    } catch {
+      addToast("Không tải được danh sách nhạc thịnh hành.", "error");
+    } finally {
+      setIsTrendingLoading(false);
+    }
+  };
+
+  const handleSelectDiscoveryTab = (tab: DiscoveryTab) => {
+    setActiveDiscoveryTab(tab);
+
+    if (tab === "trending" && trendingResults.length === 0) {
+      void handleLoadTrending();
+    }
+  };
+
+  const handleTrendingCountryChange = (country: TrendingCountry) => {
+    setTrendingCountry(country);
+    setTrendingResults([]);
+
+    if (activeDiscoveryTab === "trending") {
+      void (async () => {
+        if (isTrendingLoading) {
+          return;
+        }
+        setIsTrendingLoading(true);
+        try {
+          const items = await fetchTrendingMusic(country);
+          setTrendingResults(items);
+        } catch {
+          addToast("Không tải được danh sách nhạc thịnh hành.", "error");
+        } finally {
+          setIsTrendingLoading(false);
+        }
+      })();
     }
   };
 
@@ -458,6 +546,7 @@ export default function RoomPlaylistManager({
     }
 
     setPendingTrackToAdd(track);
+    setSelectedTargetPlaylistId(selectedPlaylistId ?? playlists[0]?.id ?? null);
     setIsPickPlaylistOpen(true);
   };
 
@@ -491,7 +580,11 @@ export default function RoomPlaylistManager({
 
       setSelectedPlaylistId(playlistId);
       setPendingTrackToAdd(null);
+      setSelectedTargetPlaylistId(null);
       setIsPickPlaylistOpen(false);
+      setSearchResults([]);
+      setTrendingResults([]);
+      setIsSearchResultsOpen(false);
       addToast("Đã thêm bài vào playlist.", "success");
     });
   };
@@ -522,13 +615,16 @@ export default function RoomPlaylistManager({
   }: { compact?: boolean } = {}) => (
     <SearchPanel
       compact={compact}
+      activeTab={activeDiscoveryTab}
       searchQuery={searchQuery}
       isSearching={isSearching}
-      searchResults={searchResults}
+      visibleResults={visibleResults}
+      isTrendingLoading={isTrendingLoading}
       onSearchQueryChange={setSearchQuery}
       onSearch={() => {
         void handleSearch();
       }}
+      onSelectTab={handleSelectDiscoveryTab}
       onOpenCreateModal={() => {
         if (isDetailModalOpen) {
           setIsDetailModalOpen(false);
@@ -536,14 +632,27 @@ export default function RoomPlaylistManager({
         setIsCreateModalOpen(true);
       }}
       onOpenSearchResults={() => setIsSearchResultsOpen(true)}
+      onClearResults={clearSearchResults}
       onPlayPreview={handlePlayPreview}
       playingUrl={playingUrl}
       onOpenAddTrack={handleOpenAddTrack}
+      trendingCountry={trendingCountry}
+      onTrendingCountryChange={handleTrendingCountryChange}
     />
   );
 
   return (
     <section className="flex flex-col gap-4">
+      {(isPending || isSearching || isTrendingLoading) && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+          {isSearching
+            ? "Đang tìm nhạc..."
+            : isTrendingLoading
+              ? "Đang tải nhạc thịnh hành..."
+              : "Đang xử lý playlist..."}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 shadow-sm">
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-700">
@@ -670,7 +779,7 @@ export default function RoomPlaylistManager({
                 disabled={isPending}
                 className="btn-primary mt-2 px-4 py-3 text-sm disabled:opacity-60"
               >
-                + Tạo
+                {isPending ? "Đang tạo..." : "+ Tạo"}
               </button>
             </div>
           </div>
@@ -715,7 +824,7 @@ export default function RoomPlaylistManager({
                 disabled={isPending}
                 className="btn-primary mt-2 px-4 py-3 text-sm disabled:opacity-60"
               >
-                Lưu thay đổi
+                {isPending ? "Đang lưu..." : "Lưu thay đổi"}
               </button>
             </div>
           </div>
@@ -729,31 +838,53 @@ export default function RoomPlaylistManager({
               Thêm &ldquo;{pendingTrackToAdd.title}&rdquo; vào playlist nào?
             </p>
             <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
-              {playlists.map((playlist) => (
-                <button
-                  key={`pick-${playlist.id}`}
-                  type="button"
-                  onClick={() =>
-                    handleAddTrackToPlaylist(playlist.id, pendingTrackToAdd)
-                  }
-                  className="flex w-full items-center justify-between rounded-xl border border-border bg-white/80 px-3 py-2 text-left hover:border-accent hover:bg-accent/5"
-                >
-                  <span className="truncate text-sm font-medium text-foreground">
-                    🎵 {playlist.name}
-                  </span>
-                  <span className="text-[11px] text-text-secondary">
-                    {(playlist.tracks ?? []).length} bài
-                  </span>
-                </button>
-              ))}
+              {playlists.map((playlist) => {
+                const isActive = selectedTargetPlaylistId === playlist.id;
+                return (
+                  <button
+                    key={`pick-${playlist.id}`}
+                    type="button"
+                    onClick={() => setSelectedTargetPlaylistId(playlist.id)}
+                    className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition-colors ${
+                      isActive
+                        ? "border-accent bg-accent/10"
+                        : "border-border bg-white/80 hover:border-accent hover:bg-accent/5"
+                    }`}
+                  >
+                    <span className="truncate text-sm font-medium text-foreground">
+                      🎵 {playlist.name}
+                    </span>
+                    <span className="text-[11px] text-text-secondary">
+                      {(playlist.tracks ?? []).length} bài
+                    </span>
+                  </button>
+                );
+              })}
             </div>
+            <button
+              type="button"
+              disabled={!selectedTargetPlaylistId || isPending}
+              onClick={() => {
+                if (!selectedTargetPlaylistId || !pendingTrackToAdd) {
+                  return;
+                }
+                handleAddTrackToPlaylist(
+                  selectedTargetPlaylistId,
+                  pendingTrackToAdd,
+                );
+              }}
+              className="btn-primary mt-4 w-full px-3 py-2 text-sm disabled:opacity-60"
+            >
+              {isPending ? "Đang thêm..." : "OK"}
+            </button>
             <button
               type="button"
               onClick={() => {
                 setIsPickPlaylistOpen(false);
                 setPendingTrackToAdd(null);
+                setSelectedTargetPlaylistId(null);
               }}
-              className="mt-4 w-full rounded-full border border-border px-3 py-2 text-sm text-text-secondary"
+              className="mt-2 w-full rounded-full border border-border px-3 py-2 text-sm text-text-secondary"
             >
               Hủy
             </button>
@@ -762,24 +893,31 @@ export default function RoomPlaylistManager({
       ) : null}
 
       {isSearchResultsOpen ? (
-        <div className="fixed inset-0 z-[80] bg-white">
+        <div className="fixed inset-0 z-[80] h-[100dvh] w-screen overflow-hidden bg-white">
           <div className="flex h-full flex-col">
             <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-              <button
-                type="button"
-                onClick={() => setIsSearchResultsOpen(false)}
-                className="rounded-full border border-border px-3 py-1.5 text-sm font-semibold text-text-secondary"
-              >
-                ←
-              </button>
+              <BackButton onClick={() => setIsSearchResultsOpen(false)} />
               <p className="text-sm font-semibold text-foreground">
-                Tất cả kết quả tìm kiếm ({searchResults.length})
+                {activeDiscoveryTab === "trending"
+                  ? `Nhạc thịnh hành (${visibleResults.length})`
+                  : `Tất cả kết quả tìm kiếm (${visibleResults.length})`}
               </p>
+              <span
+                className={`ml-auto rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${
+                  activeDiscoveryTab === "trending"
+                    ? "border border-rose-200 bg-rose-50 text-rose-600"
+                    : "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                }`}
+              >
+                {activeDiscoveryTab === "trending"
+                  ? "Tab: Thịnh hành"
+                  : "Tab: Tìm kiếm"}
+              </span>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 pb-6 pt-4">
+            <div className="flex-1 touch-pan-y overflow-y-auto px-4 pb-6 pt-4">
               <div className="space-y-2">
-                {searchResults.map((track) => (
+                {visibleResults.map((track) => (
                   <SearchResultRow
                     key={`all-${track.source}-${track.source_track_id}`}
                     track={track}
@@ -796,16 +934,10 @@ export default function RoomPlaylistManager({
       ) : null}
 
       {isDetailModalOpen && selectedPlaylist ? (
-        <div className="fixed inset-0 z-[80] bg-white">
+        <div className="fixed inset-0 z-[80] h-[100dvh] w-screen overflow-hidden bg-white">
           <div className="flex h-full flex-col">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <button
-                type="button"
-                onClick={() => setIsDetailModalOpen(false)}
-                className="rounded-full border border-border px-3 py-1.5 text-sm font-semibold text-text-secondary"
-              >
-                ←
-              </button>
+              <BackButton onClick={() => setIsDetailModalOpen(false)} />
               <p className="truncate px-3 text-sm font-semibold text-foreground">
                 🎵 {selectedPlaylist.name}
               </p>
@@ -822,7 +954,7 @@ export default function RoomPlaylistManager({
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 pb-6 pt-4">
+            <div className="flex-1 touch-pan-y overflow-y-auto px-4 pb-6 pt-4">
               <div className="sticky top-0 z-20 -mx-4 bg-white px-4 pb-3">
                 {renderSearchPanel({ compact: true })}
               </div>

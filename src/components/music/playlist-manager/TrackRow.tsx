@@ -62,16 +62,6 @@ export default function TrackRow({
           <span className="text-[11px] text-text-muted">
             {formatDuration(track.duration_ms)}
           </span>
-          {track.external_url ? (
-            <a
-              href={track.external_url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-[11px] text-accent hover:underline"
-            >
-              Mở ↗
-            </a>
-          ) : null}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
