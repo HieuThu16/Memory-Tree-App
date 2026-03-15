@@ -8,6 +8,7 @@ import {
   useState,
   useTransition,
 } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import type {
   MemoryEditHistoryRecord,
   MemoryParticipant,
@@ -20,11 +21,13 @@ import { useTreeStore } from "@/lib/stores/treeStore";
 import { useUiStore } from "@/lib/stores/uiStore";
 import { deleteMemory } from "@/lib/actions";
 import MemoryEditHistoryList from "../memory/MemoryEditHistoryList";
+import MemoryComments from "../memory/MemoryComments";
 import TreeBranch from "./TreeBranch";
 import TreeNode from "./TreeNode";
 import TreeParticles from "./TreeParticles";
 import MemoryMediaDisplay from "../memory/MemoryMediaDisplay";
 import BackButton from "../ui/BackButton";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import {
   TREE_NODE_SIZES,
   type MemoryNode,
@@ -78,9 +81,20 @@ const formatCreatedAt = (memory: MemoryRecord) => {
   return date ? createdAtFormatter.format(date) : "?";
 };
 
+const formatEventTime = (value?: string | null) => {
+  if (!value) return null;
+  return value.slice(0, 5);
+};
+
 const formatYear = (memory: MemoryRecord) => {
   const date = getMemoryDate(memory);
   return date ? String(date.getFullYear()) : "Unknown";
+};
+
+const formatMonth = (memory: MemoryRecord) => {
+  const date = getMemoryDate(memory);
+  if (!date) return "Tháng ?";
+  return `Tháng ${String(date.getMonth() + 1).padStart(2, "0")}`;
 };
 
 const compareMemories = (a?: MemoryRecord, b?: MemoryRecord) => {
@@ -116,6 +130,7 @@ const buildTree = (memories: MemoryRecord[]): MemoryNode => {
   });
 
   const yearBuckets = new Map<string, MemoryNode>();
+  const monthBucketsByYear = new Map<string, Map<string, MemoryNode>>();
 
   const getYearNode = (memory: MemoryRecord) => {
     const year = formatYear(memory);
@@ -133,6 +148,32 @@ const buildTree = (memories: MemoryRecord[]): MemoryNode => {
     return yearBuckets.get(year)!;
   };
 
+  const getMonthNode = (memory: MemoryRecord) => {
+    const year = formatYear(memory);
+    const month = formatMonth(memory);
+    const yearNode = getYearNode(memory);
+
+    if (!monthBucketsByYear.has(year)) {
+      monthBucketsByYear.set(year, new Map<string, MemoryNode>());
+    }
+
+    const monthMap = monthBucketsByYear.get(year)!;
+    if (!monthMap.has(month)) {
+      const monthNode: MemoryNode = {
+        id: `month-${year}-${month}`,
+        title: month,
+        type: "album",
+        date: "",
+        children: [],
+        kind: "month",
+      };
+      monthMap.set(month, monthNode);
+      yearNode.children?.push(monthNode);
+    }
+
+    return monthMap.get(month)!;
+  };
+
   memories.forEach((memory) => {
     const node = nodesById.get(memory.id)!;
     if (memory.parent_id && nodesById.has(memory.parent_id)) {
@@ -142,23 +183,30 @@ const buildTree = (memories: MemoryRecord[]): MemoryNode => {
       return;
     }
 
-    const yearNode = getYearNode(memory);
-    yearNode.children?.push(node);
+    const monthNode = getMonthNode(memory);
+    monthNode.children?.push(node);
   });
 
   yearBuckets.forEach((bucket) => {
-    if (bucket.children?.length) {
-      bucket.children.sort((a, b) => compareMemories(b.memory, a.memory));
+    if (!bucket.children?.length) {
+      return;
     }
+
+    bucket.children.forEach((monthNode) => {
+      if (!monthNode.children?.length) return;
+      monthNode.children.sort((a, b) => compareMemories(a.memory, b.memory));
+    });
+
+    bucket.children.sort((a, b) => a.title.localeCompare(b.title));
   });
 
   const sortedYears = Array.from(yearBuckets.values()).sort((a, b) => {
     const aNum = Number(a.title);
     const bNum = Number(b.title);
     if (Number.isNaN(aNum) || Number.isNaN(bNum)) {
-      return b.title.localeCompare(a.title);
+      return a.title.localeCompare(b.title); // Ascending
     }
-    return bNum - aNum;
+    return aNum - bNum; // Ascending (Older year at top)
   });
 
   root.children = sortedYears;
@@ -170,11 +218,13 @@ export default function MemoryTree({
   participants = [],
   participantsByUserId,
   isTwoPerson = false,
+  currentUserId,
 }: {
   memories: MemoryRecord[];
   participants?: MemoryParticipant[];
   participantsByUserId?: Map<string, MemoryParticipant>;
   isTwoPerson?: boolean;
+  currentUserId?: string;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const selectedId = useTreeStore((s) => s.selectedId);
@@ -192,6 +242,30 @@ export default function MemoryTree({
   >(null);
   const [isDeleting, startDeleteTransition] = useTransition();
 
+  // Debug logging for location display investigation
+  useEffect(() => {
+    const memoriesWithLocation = memories.filter((m) => m.location);
+    if (memoriesWithLocation.length > 0) {
+      console.log(
+        `[MemoryTree] ${memoriesWithLocation.length}/${memories.length} memories have location:`,
+        memoriesWithLocation.map((m) => ({
+          id: m.id,
+          title: m.title,
+          location: m.location,
+          room_id: m.room_id,
+        })),
+      );
+    }
+    // Also check if any memories have location=null but showed location in DB
+    const memoriesWithoutLocation = memories.filter((m) => !m.location);
+    if (memoriesWithoutLocation.length > 0) {
+      console.log(
+        `[MemoryTree] ${memoriesWithoutLocation.length} memories WITHOUT location:`,
+        memoriesWithoutLocation.map((m) => ({ id: m.id, title: m.title })),
+      );
+    }
+  }, [memories]);
+
   const treeData = useMemo(() => buildTree(memories), [memories]);
 
   const { nodes, branches, trunk, height } = useMemo(() => {
@@ -205,6 +279,7 @@ export default function MemoryTree({
       if (
         node.kind === "root" ||
         node.kind === "year" ||
+        node.kind === "month" ||
         node.side === "center"
       ) {
         return {
@@ -262,24 +337,30 @@ export default function MemoryTree({
       if (!children?.length) return;
 
       children.forEach((child, index) => {
+        const childKind = child.kind ?? "memory";
         const side =
-          parent.side === "center"
-            ? (index + seed) % 2 === 0
-              ? "left"
-              : "right"
-            : parent.side;
+          childKind === "month"
+            ? "center"
+            : parent.side === "center"
+              ? (index + seed) % 2 === 0
+                ? "left"
+                : "right"
+              : parent.side;
         const xOffset = Math.min(132, 104 + Math.max(0, depth - 1) * 18);
-        cursorY += depth === 2 ? 92 : 84;
+        cursorY += childKind === "month" ? 76 : depth === 3 ? 92 : 84;
 
         const childNode: PositionedNode = {
           ...child,
-          x: CENTER_X + (side === "left" ? -xOffset : xOffset),
+          x:
+            side === "center"
+              ? CENTER_X
+              : CENTER_X + (side === "left" ? -xOffset : xOffset),
           y: cursorY,
           depth,
           hasChildren: Boolean(child.children?.length),
           side,
           ownerId: child.memory?.user_id ?? null,
-          kind: "memory",
+          kind: childKind,
         };
 
         positioned.push(childNode);
@@ -335,6 +416,9 @@ export default function MemoryTree({
   }, [nodesById, selectedId]);
 
   const selectedMemory = selectedNode?.memory ?? null;
+  const selectedLocation = selectedMemory?.location?.trim() || null;
+  const selectedWithWhom = selectedMemory?.with_whom?.trim() || null;
+  const selectedEventTime = formatEventTime(selectedMemory?.event_time);
   const selectedParticipant = selectedMemory
     ? resolvedParticipantsByUserId.get(selectedMemory.user_id)
     : undefined;
@@ -502,6 +586,15 @@ export default function MemoryTree({
 
   const isHistoryOpen =
     !!selectedMemory && historyOpenForMemoryId === selectedMemory.id;
+  const memoriesWithLocation = useMemo(
+    () =>
+      memories.filter(
+        (memory) =>
+          typeof memory.location === "string" &&
+          memory.location.trim().length > 0,
+      ),
+    [memories],
+  );
 
   return (
     <div className="w-full">
@@ -576,305 +669,403 @@ export default function MemoryTree({
         </button>
       </div>
 
-      <div className="mt-2 rounded-2xl bg-[linear-gradient(180deg,#fffdfa_0%,#f8f2ea_100%)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] sm:rounded-[30px] sm:p-3">
-        <svg
-          ref={svgRef}
-          viewBox={`0 0 ${CANVAS_WIDTH} ${height}`}
-          className="block h-auto w-full drop-shadow-[0_24px_42px_rgba(95,79,161,0.14)]"
-          role="img"
-          aria-label="Memory tree"
-          preserveAspectRatio="xMidYMin meet"
-        >
-          <defs>
-            <linearGradient id="branchGradient" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#b6a1ff" stopOpacity="0.95" />
-              <stop offset="100%" stopColor="#7c5ce6" stopOpacity="0.58" />
-            </linearGradient>
-            <radialGradient id="treeSky" cx="50%" cy="35%" r="70%">
-              <stop offset="0%" stopColor="#fffefb" />
-              <stop offset="100%" stopColor="#f3ede4" />
-            </radialGradient>
-            <linearGradient id="rootGradient" x1="0" x2="1" y1="0" y2="1">
-              <stop offset="0%" stopColor="#7c5ce6" />
-              <stop offset="100%" stopColor="#a693ff" />
-            </linearGradient>
-          </defs>
-
-          <rect
-            x="0"
-            y="0"
-            width={CANVAS_WIDTH}
-            height={height}
-            rx="42"
-            fill="url(#treeSky)"
-          />
-
-          {/* Decorative flowers at bottom */}
-          <g opacity="0.4">
-            {/* Grass & flowers at base */}
-            <ellipse
-              cx={CENTER_X}
-              cy={height - 48}
-              rx="150"
-              ry="28"
-              fill="rgba(136, 216, 171, 0.25)"
-            />
-            {/* Small flowers scattered */}
-            <text
-              x={CENTER_X - 120}
-              y={height - 70}
-              fontSize="16"
-              opacity="0.6"
-            >
-              🌸
-            </text>
-            <text x={CENTER_X + 90} y={height - 80} fontSize="14" opacity="0.5">
-              🌼
-            </text>
-            <text x={CENTER_X - 60} y={height - 55} fontSize="12" opacity="0.5">
-              ✿
-            </text>
-            <text x={CENTER_X + 40} y={height - 62} fontSize="10" opacity="0.4">
-              🌷
-            </text>
-            <text
-              x={CENTER_X - 140}
-              y={height - 90}
-              fontSize="11"
-              opacity="0.35"
-            >
-              🍃
-            </text>
-            <text
-              x={CENTER_X + 130}
-              y={height - 95}
-              fontSize="11"
-              opacity="0.35"
-            >
-              🍃
-            </text>
-            {/* Top decoration */}
-            <text x={CENTER_X - 100} y={60} fontSize="12" opacity="0.3">
-              🦋
-            </text>
-            <text x={CENTER_X + 110} y={50} fontSize="10" opacity="0.25">
-              🌸
-            </text>
-          </g>
-
-          <line
-            x1={CENTER_X}
-            y1={(trunk?.y ?? 0) + TREE_NODE_SIZES.root.height / 2}
-            x2={CENTER_X}
-            y2={height - 86}
-            stroke="url(#branchGradient)"
-            strokeWidth={6}
-            strokeLinecap="round"
-          />
-
-          <TreeParticles width={CANVAS_WIDTH} height={height} />
-
-          <g>
-            {branches.map((branch, index) => (
-              <TreeBranch key={branch.id} branch={branch} index={index} />
-            ))}
-          </g>
-
-          <g>
-            {nodes.map((node, index) => (
-              <TreeNode
-                key={node.id}
-                node={node}
-                index={index}
-                isSelected={selectedId === node.id}
-                onSelect={handleSelectNode}
-                participant={
-                  node.ownerId
-                    ? resolvedParticipantsByUserId.get(node.ownerId)
-                    : undefined
-                }
-              />
-            ))}
-          </g>
-
-          {/* Decorative scattered dots */}
-          <g opacity={0.6}>
-            <circle
-              cx={CENTER_X - 138}
-              cy={height - 212}
-              r={5}
-              fill="#c9bafc"
-            />
-            <circle
-              cx={CENTER_X + 124}
-              cy={height - 286}
-              r={5}
-              fill="#88d8ab"
-            />
-            <circle cx={CENTER_X - 48} cy={height - 328} r={4} fill="#ef8a83" />
-            <circle
-              cx={CENTER_X + 160}
-              cy={height - 180}
-              r={3.5}
-              fill="#f0c76b"
-            />
-            <circle
-              cx={CENTER_X - 155}
-              cy={height - 150}
-              r={3}
-              fill="#d772b3"
-            />
-          </g>
-        </svg>
-      </div>
-
-      {/* Detail Popup - shown on click (immediately for 2-person rooms) */}
-      {isDetailOpen && selectedMemory ? (
-        <div
-          className="fixed inset-0 z-[9999] h-[100dvh] w-screen overflow-hidden bg-white"
-          onClick={() => setIsDetailOpen(false)}
-        >
-          <div
-            className="glass-card flex h-full w-full flex-col rounded-none"
-            onClick={(event) => event.stopPropagation()}
-          >
-            {/* Popup Header */}
-            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <BackButton onClick={() => setIsDetailOpen(false)} />
-                <h3 className="truncate text-base font-semibold text-foreground sm:text-lg">
-                  {selectedMemory.title}
-                </h3>
-              </div>
-              <div className="flex items-center gap-1">
-                {/* Edit */}
-                <button
-                  type="button"
-                  onClick={() => handleEdit(selectedMemory)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-accent hover:text-accent"
-                  title="Sửa"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                </button>
-                {/* Delete */}
-                <button
-                  type="button"
-                  onClick={() => handleDelete(selectedMemory.id)}
-                  disabled={isDeleting}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-rose hover:text-rose disabled:opacity-50"
-                  title="Xóa"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            {/* Popup Body */}
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 touch-pan-y [overscroll-behavior:contain] [-webkit-overflow-scrolling:touch] sm:px-5 sm:py-4">
-              {/* Meta info row */}
-              <div className="flex flex-wrap items-center gap-1 text-[10px] sm:gap-1.5">
-                <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-text-secondary">
-                  🗓 {formatLongDate(selectedMemory)}
-                </span>
-                <span className="hidden items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-text-muted sm:inline-flex">
-                  🕐 Tạo: {formatCreatedAt(selectedMemory)}
-                </span>
-                {selectedMemory.category && !selectedMemory.room_id ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-green">
-                    ✿ {selectedMemory.category}
-                  </span>
-                ) : null}
-                {selectedMemory.location ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-blue-500">
-                    📍 {selectedMemory.location}
-                  </span>
-                ) : null}
-              </div>
-
-              {/* Author */}
-              {selectedAppearance ? (
-                <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] text-text-secondary sm:mt-2 sm:px-2.5 sm:text-[11px]">
-                  <div
-                    className="flex h-5 w-5 items-center justify-center rounded-full text-[7px] font-bold"
-                    style={{
-                      backgroundColor: selectedAppearance.softColor,
-                      color: selectedAppearance.strongColor,
-                    }}
-                  >
-                    {selectedAppearance.initials.slice(0, 2)}
-                  </div>
-                  <span>{selectedAppearance.displayName}</span>
-                </div>
-              ) : null}
-
-              {/* Media Carousel */}
-              <MemoryMediaDisplay media={selectedMemory.media || []} />
-
-              {/* Content */}
-              <div className="mt-3 rounded-xl border border-border/50 bg-white/70 p-3 text-sm leading-relaxed text-text-secondary">
-                {selectedMemory.content || (
-                  <span className="italic text-text-muted">
-                    Chưa có nội dung 🌸
-                  </span>
-                )}
-              </div>
-
-              {selectedMemory.room_id ? (
-                <p className="mt-3 text-xs leading-relaxed text-text-muted">
-                  Thành viên trong room này có thể sửa kỉ niệm. Mọi thay đổi đều
-                  được lưu lại bên dưới.
-                </p>
-              ) : null}
-
+      {memoriesWithLocation.length > 0 ? (
+        <div className="mt-2 rounded-xl border border-border bg-white/75 px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary">
+            📍 Vị trí đã lưu ({memoriesWithLocation.length})
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {memoriesWithLocation.slice(0, 6).map((memory) => (
               <button
+                key={memory.id}
                 type="button"
                 onClick={() => {
-                  if (!selectedMemory) return;
-                  setHistoryOpenForMemoryId((prev) =>
-                    prev === selectedMemory.id ? null : selectedMemory.id,
-                  );
+                  setSelectedId(memory.id);
+                  setIsDetailOpen(true);
                 }}
-                className="mt-3 rounded-full border border-border bg-white/80 px-3 py-1.5 text-xs font-semibold text-text-secondary"
+                className="rounded-full border border-border bg-white px-2.5 py-1 text-[11px] text-blue-500 transition hover:border-blue-300"
+                title={memory.title}
               >
-                {isHistoryOpen
-                  ? "Ẩn lịch sử chỉnh sửa"
-                  : "Xem lịch sử chỉnh sửa"}
+                📍 {memory.location?.trim()}
               </button>
-
-              {isHistoryOpen ? (
-                <MemoryEditHistoryList
-                  entries={historyEntries ?? []}
-                  loading={isHistoryLoading}
-                />
-              ) : null}
-            </div>
+            ))}
           </div>
         </div>
       ) : null}
+
+      <div className="mt-2 overflow-hidden rounded-2xl bg-[linear-gradient(180deg,#fffdfa_0%,#f8f2ea_100%)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] sm:rounded-[30px] sm:p-3">
+        <TransformWrapper
+          initialScale={1}
+          minScale={0.5}
+          maxScale={3}
+          centerOnInit
+          wheel={{ step: 0.1 }}
+        >
+          <TransformComponent
+            wrapperClass="!w-full !h-full"
+            contentClass="!w-full !h-full flex items-center justify-center cursor-grab active:cursor-grabbing"
+          >
+            <svg
+              ref={svgRef}
+              viewBox={`0 0 ${CANVAS_WIDTH} ${height}`}
+              className="block h-auto w-full drop-shadow-[0_24px_42px_rgba(95,79,161,0.14)]"
+              role="img"
+              aria-label="Memory tree"
+              preserveAspectRatio="xMidYMin meet"
+            >
+              <defs>
+                <linearGradient id="branchGradient" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="#b6a1ff" stopOpacity="0.95" />
+                  <stop offset="100%" stopColor="#7c5ce6" stopOpacity="0.58" />
+                </linearGradient>
+                <radialGradient id="treeSky" cx="50%" cy="35%" r="70%">
+                  <stop offset="0%" stopColor="#fffefb" />
+                  <stop offset="100%" stopColor="#f3ede4" />
+                </radialGradient>
+                <linearGradient id="rootGradient" x1="0" x2="1" y1="0" y2="1">
+                  <stop offset="0%" stopColor="#7c5ce6" />
+                  <stop offset="100%" stopColor="#a693ff" />
+                </linearGradient>
+              </defs>
+
+              <rect
+                x="0"
+                y="0"
+                width={CANVAS_WIDTH}
+                height={height}
+                rx="42"
+                fill="url(#treeSky)"
+              />
+
+              {/* Decorative flowers at bottom */}
+              <g opacity="0.4">
+                {/* Grass & flowers at base */}
+                <ellipse
+                  cx={CENTER_X}
+                  cy={height - 48}
+                  rx="150"
+                  ry="28"
+                  fill="rgba(136, 216, 171, 0.25)"
+                />
+                {/* Small flowers scattered */}
+                <text
+                  x={CENTER_X - 120}
+                  y={height - 70}
+                  fontSize="16"
+                  opacity="0.6"
+                >
+                  🌸
+                </text>
+                <text
+                  x={CENTER_X + 90}
+                  y={height - 80}
+                  fontSize="14"
+                  opacity="0.5"
+                >
+                  🌼
+                </text>
+                <text
+                  x={CENTER_X - 60}
+                  y={height - 55}
+                  fontSize="12"
+                  opacity="0.5"
+                >
+                  ✿
+                </text>
+                <text
+                  x={CENTER_X + 40}
+                  y={height - 62}
+                  fontSize="10"
+                  opacity="0.4"
+                >
+                  🌷
+                </text>
+                <text
+                  x={CENTER_X - 140}
+                  y={height - 90}
+                  fontSize="11"
+                  opacity="0.35"
+                >
+                  🍃
+                </text>
+                <text
+                  x={CENTER_X + 130}
+                  y={height - 95}
+                  fontSize="11"
+                  opacity="0.35"
+                >
+                  🍃
+                </text>
+                {/* Top decoration */}
+                <text x={CENTER_X - 100} y={60} fontSize="12" opacity="0.3">
+                  🦋
+                </text>
+                <text x={CENTER_X + 110} y={50} fontSize="10" opacity="0.25">
+                  🌸
+                </text>
+              </g>
+
+              <line
+                x1={CENTER_X}
+                y1={(trunk?.y ?? 0) + TREE_NODE_SIZES.root.height / 2}
+                x2={CENTER_X}
+                y2={height - 86}
+                stroke="url(#branchGradient)"
+                strokeWidth={6}
+                strokeLinecap="round"
+              />
+
+              <TreeParticles width={CANVAS_WIDTH} height={height} />
+
+              <g>
+                {branches.map((branch, index) => (
+                  <TreeBranch key={branch.id} branch={branch} index={index} />
+                ))}
+              </g>
+
+              <g>
+                {nodes.map((node, index) => (
+                  <TreeNode
+                    key={node.id}
+                    node={node}
+                    index={index}
+                    isSelected={selectedId === node.id}
+                    onSelect={handleSelectNode}
+                    participant={
+                      node.ownerId
+                        ? resolvedParticipantsByUserId.get(node.ownerId)
+                        : undefined
+                    }
+                  />
+                ))}
+              </g>
+
+              {/* Decorative scattered dots */}
+              <g opacity={0.6}>
+                <circle
+                  cx={CENTER_X - 138}
+                  cy={height - 212}
+                  r={5}
+                  fill="#c9bafc"
+                />
+                <circle
+                  cx={CENTER_X + 124}
+                  cy={height - 286}
+                  r={5}
+                  fill="#88d8ab"
+                />
+                <circle
+                  cx={CENTER_X - 48}
+                  cy={height - 328}
+                  r={4}
+                  fill="#ef8a83"
+                />
+                <circle
+                  cx={CENTER_X + 160}
+                  cy={height - 180}
+                  r={3.5}
+                  fill="#f0c76b"
+                />
+                <circle
+                  cx={CENTER_X - 155}
+                  cy={height - 150}
+                  r={3}
+                  fill="#d772b3"
+                />
+              </g>
+            </svg>
+          </TransformComponent>
+        </TransformWrapper>
+      </div>
+
+      {/* Detail Popup - shown on click (immediately for 2-person rooms) */}
+      <AnimatePresence>
+        {isDetailOpen && selectedMemory ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden bg-black/40 p-0 sm:p-4 backdrop-blur-sm"
+            onClick={() => setIsDetailOpen(false)}
+          >
+            <motion.div
+              initial={{ y: "100%", opacity: 0, scale: 0.95 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: "100%", opacity: 0, scale: 0.95 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              drag="y"
+              dragConstraints={{ top: 0, bottom: 200 }}
+              dragElastic={0.2}
+              onDragEnd={(e, info) => {
+                if (info.offset.y > 100) {
+                  setIsDetailOpen(false);
+                }
+              }}
+              className="glass-card flex h-[95dvh] w-full max-w-2xl flex-col rounded-t-3xl sm:h-[85dvh] sm:rounded-3xl mt-auto sm:mt-0 relative"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {/* Drag Handle for Mobile */}
+              <div className="absolute top-2 left-1/2 h-1.5 w-12 -translate-x-1/2 rounded-full bg-black/15 sm:hidden" />
+              {/* Popup Header */}
+              <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <BackButton onClick={() => setIsDetailOpen(false)} />
+                  <h3 className="truncate text-base font-semibold text-foreground sm:text-lg">
+                    {selectedMemory.title}
+                  </h3>
+                </div>
+                <div className="flex items-center gap-1">
+                  {/* Edit */}
+                  <button
+                    type="button"
+                    onClick={() => handleEdit(selectedMemory)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-accent hover:text-accent"
+                    title="Sửa"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
+                  {/* Delete */}
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(selectedMemory.id)}
+                    disabled={isDeleting}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-secondary transition hover:border-rose hover:text-rose disabled:opacity-50"
+                    title="Xóa"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Popup Body */}
+              <div
+                className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5 sm:py-4"
+                onPointerDownCapture={(e) => e.stopPropagation()}
+              >
+                {/* Meta info row */}
+                <div className="flex flex-wrap items-center gap-1 text-[10px] sm:gap-1.5">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-text-secondary">
+                    🗓 {formatLongDate(selectedMemory)}
+                  </span>
+                  <span className="hidden items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-text-muted sm:inline-flex">
+                    🕐 Tạo: {formatCreatedAt(selectedMemory)}
+                  </span>
+                  {selectedMemory.category && !selectedMemory.room_id ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-green">
+                      ✿ {selectedMemory.category}
+                    </span>
+                  ) : null}
+                  {selectedWithWhom ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-text-secondary">
+                      👥 {selectedWithWhom}
+                    </span>
+                  ) : null}
+                  {selectedEventTime ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-text-secondary">
+                      🕒 {selectedEventTime}
+                    </span>
+                  ) : null}
+                  {selectedLocation ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-white/80 px-2 py-1 font-medium text-blue-500">
+                      📍 {selectedLocation}
+                    </span>
+                  ) : null}
+                </div>
+
+                {/* Author */}
+                {selectedAppearance ? (
+                  <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] text-text-secondary sm:mt-2 sm:px-2.5 sm:text-[11px]">
+                    <div
+                      className="flex h-5 w-5 items-center justify-center rounded-full text-[7px] font-bold"
+                      style={{
+                        backgroundColor: selectedAppearance.softColor,
+                        color: selectedAppearance.strongColor,
+                      }}
+                    >
+                      {selectedAppearance.initials.slice(0, 2)}
+                    </div>
+                    <span>{selectedAppearance.displayName}</span>
+                  </div>
+                ) : null}
+
+                {/* Media Carousel */}
+                <MemoryMediaDisplay media={selectedMemory.media || []} />
+
+                {/* Content */}
+                <div className="mt-3 rounded-xl border border-border/50 bg-white/70 p-3 text-sm leading-relaxed text-text-secondary">
+                  {selectedMemory.content || (
+                    <span className="italic text-text-muted">
+                      Chưa có nội dung 🌸
+                    </span>
+                  )}
+                </div>
+
+                {selectedMemory.room_id ? (
+                  <p className="mt-3 text-xs leading-relaxed text-text-muted">
+                    Thành viên trong room này có thể sửa kỉ niệm. Mọi thay đổi
+                    đều được lưu lại bên dưới.
+                  </p>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectedMemory) return;
+                    setHistoryOpenForMemoryId((prev) =>
+                      prev === selectedMemory.id ? null : selectedMemory.id,
+                    );
+                  }}
+                  className="mt-3 rounded-full border border-border bg-white/80 px-3 py-1.5 text-xs font-semibold text-text-secondary"
+                >
+                  {isHistoryOpen
+                    ? "Ẩn lịch sử chỉnh sửa"
+                    : "Xem lịch sử chỉnh sửa"}
+                </button>
+
+                {isHistoryOpen ? (
+                  <MemoryEditHistoryList
+                    entries={historyEntries ?? []}
+                    loading={isHistoryLoading}
+                  />
+                ) : null}
+
+                {/* Comments Section */}
+                {currentUserId && (
+                  <MemoryComments
+                    memoryId={selectedMemory.id}
+                    roomId={selectedMemory.room_id}
+                    currentUserId={currentUserId}
+                  />
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {/* When a memory is selected but popup isn't open, show a small floating bar */}
       {selectedMemory && !isDetailOpen ? (
@@ -884,6 +1075,16 @@ export default function MemoryTree({
             <span className="truncate text-xs font-semibold text-foreground">
               {selectedMemory.title}
             </span>
+            {selectedLocation ? (
+              <span className="hidden truncate rounded-full border border-border bg-white px-2 py-0.5 text-[10px] font-medium text-blue-500 sm:inline-flex">
+                📍 {selectedLocation}
+              </span>
+            ) : null}
+            {selectedEventTime ? (
+              <span className="hidden rounded-full border border-border bg-white px-2 py-0.5 text-[10px] font-medium text-text-secondary sm:inline-flex">
+                🕒 {selectedEventTime}
+              </span>
+            ) : null}
           </div>
           <div className="flex items-center gap-1">
             <button

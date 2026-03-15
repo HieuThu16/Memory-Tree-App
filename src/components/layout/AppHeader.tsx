@@ -21,34 +21,30 @@ export default function AppHeader({ user }: { user: UserInfo | null }) {
     : "MT";
 
   return (
-    <header className="px-2 pt-2 sm:px-4 sm:pt-3">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between rounded-2xl bg-[linear-gradient(135deg,var(--accent)_0%,var(--accent-soft)_100%)] px-3 py-2 text-white shadow-[0_16px_36px_-20px_rgba(108,76,215,0.7)]">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]">
-            🌸
-          </div>
-          <h2 className="text-sm font-semibold text-white sm:text-base">
+    <header className="relative z-50 px-2 pt-1.5 sm:px-4 sm:pt-2.5">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between rounded-2xl border border-white/60 bg-white/40 px-3 py-2 backdrop-blur-2xl shadow-[0_8px_32px_-12px_rgba(124,92,230,0.3)]">
+        <div className="flex items-center gap-2.5">
+          <h2 className="bg-gradient-to-r from-accent to-purple-600 bg-clip-text text-sm font-bold text-transparent sm:text-base">
             Cây Kỉ Niệm
           </h2>
-          <span className="text-xs opacity-70">🌿</span>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           {user && (
             <>
-              <span className="hidden text-[10px] text-white/70 sm:inline">
+              <span className="hidden text-[11px] font-medium text-text-secondary sm:inline">
                 {user.displayName}
               </span>
               <InstallAppButton />
               <button
                 type="button"
                 onClick={() => signOut()}
-                className="rounded-full border border-white/20 bg-white/14 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-white/22"
+                className="rounded-full border border-accent/20 bg-white/60 px-2.5 py-1 text-[11px] font-semibold text-accent shadow-sm transition hover:bg-accent hover:text-white"
                 title="Đăng xuất"
               >
                 Đăng xuất
               </button>
-              <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white/30 bg-white/90 shadow-sm">
+              <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-white/90 shadow-md">
                 {user.avatarUrl ? (
                   <img
                     src={user.avatarUrl}
@@ -57,7 +53,7 @@ export default function AppHeader({ user }: { user: UserInfo | null }) {
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <span className="text-[9px] font-bold text-accent">
+                  <span className="text-[10px] font-bold text-accent">
                     {initials}
                   </span>
                 )}

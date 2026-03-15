@@ -7,6 +7,8 @@ export default function TrackRow({
   index,
   isPlaying,
   onPlayTrack,
+  onPlayFull,
+  canPlayFull,
   onRemove,
   isPending,
 }: {
@@ -14,6 +16,8 @@ export default function TrackRow({
   index: number;
   isPlaying: boolean;
   onPlayTrack: (track: PlaylistTrackRecord) => void;
+  onPlayFull: (track: PlaylistTrackRecord) => void;
+  canPlayFull: boolean;
   onRemove: (id: string) => void;
   isPending: boolean;
 }) {
@@ -65,6 +69,17 @@ export default function TrackRow({
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
+        {canPlayFull ? (
+          <button
+            type="button"
+            onClick={() => onPlayFull(track)}
+            className="rounded-full border border-accent bg-accent/10 px-2 py-1 text-[10px] font-semibold text-accent"
+            aria-label="Nghe full"
+            title="Nghe full"
+          >
+            Full
+          </button>
+        ) : null}
         {track.preview_url ? (
           <button
             type="button"

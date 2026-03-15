@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMusicStore } from "@/lib/stores/musicStore";
 import type {
   MusicSearchResult,
   PlaylistRecord,
@@ -19,9 +20,7 @@ import PlaybackModeButton from "./playlist-manager/PlaybackModeButton";
 import SearchPanel from "./playlist-manager/SearchPanel";
 import SearchResultRow from "./playlist-manager/SearchResultRow";
 import TrackRow from "./playlist-manager/TrackRow";
-import type { PlaybackMode } from "./playlist-manager/types";
 import BackButton from "@/components/ui/BackButton";
-import { getSharedAudio } from "@/lib/music/sharedAudio";
 
 type DiscoveryTab = "search" | "trending";
 type TrendingCountry = "vn" | "us" | "kr" | "jp" | "gb";
@@ -53,9 +52,17 @@ export default function RoomPlaylistManager({
   const [isSearching, setIsSearching] = useState(false);
   const [isTrendingLoading, setIsTrendingLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [playingUrl, setPlayingUrl] = useState<string | null>(null);
-  const [currentTrackId, setCurrentTrackId] = useState<string | null>(null);
-  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>("off");
+  const {
+    playingUrl,
+    currentTrackId,
+    playbackMode,
+    setPlaybackMode,
+    playTrack,
+    playPreview,
+    playNext,
+    playPrevious,
+    setPlaylistTracks,
+  } = useMusicStore();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -66,7 +73,77 @@ export default function RoomPlaylistManager({
   const [selectedTargetPlaylistId, setSelectedTargetPlaylistId] = useState<
     string | null
   >(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [fullTrack, setFullTrack] = useState<{
+    title: string;
+    source: string;
+    embedUrl: string;
+    isAudio: boolean;
+  } | null>(null);
+  // Audio state is now global in useMusicStore
+
+  const resolveFullTrackPlayback = (track: {
+    source: string;
+    source_track_id: string;
+    preview_url: string | null;
+    external_url: string | null;
+    title: string;
+  }) => {
+    if (track.source === "youtube") {
+      const id = track.source_track_id;
+      if (!id) return null;
+      return {
+        title: track.title,
+        source: "YouTube",
+        embedUrl: `https://www.youtube.com/embed/${id}?autoplay=1&playsinline=1`,
+        isAudio: false,
+      };
+    }
+
+    if (track.external_url?.includes("soundcloud.com")) {
+      return {
+        title: track.title,
+        source: "SoundCloud",
+        embedUrl: `https://w.soundcloud.com/player/?url=${encodeURIComponent(track.external_url)}&auto_play=true`,
+        isAudio: false,
+      };
+    }
+
+    if (track.source === "jamendo" && track.preview_url) {
+      return {
+        title: track.title,
+        source: "Jamendo",
+        embedUrl: track.preview_url,
+        isAudio: true,
+      };
+    }
+
+    return null;
+  };
+
+  const canPlayFullTrack = (track: {
+    source: string;
+    source_track_id: string;
+    preview_url: string | null;
+    external_url: string | null;
+    title: string;
+  }) => Boolean(resolveFullTrackPlayback(track));
+
+  const handlePlayFullTrack = (track: {
+    source: string;
+    source_track_id: string;
+    preview_url: string | null;
+    external_url: string | null;
+    title: string;
+  }) => {
+    const resolved = resolveFullTrackPlayback(track);
+    if (!resolved) {
+      addToast("Bài này chưa có nguồn nghe full phù hợp.", "error");
+      return;
+    }
+
+    playPreview(null);
+    setFullTrack(resolved);
+  };
 
   useEffect(() => {
     setPlaylists(initialPlaylists);
@@ -107,18 +184,7 @@ export default function RoomPlaylistManager({
     setEditingDescription(selectedPlaylist?.description ?? "");
   }, [selectedPlaylist]);
 
-  useEffect(() => {
-    if (!currentTrackId) {
-      return;
-    }
-
-    const exists = playableTracks.some((track) => track.id === currentTrackId);
-    if (!exists) {
-      audioRef.current?.pause();
-      setPlayingUrl(null);
-      setCurrentTrackId(null);
-    }
-  }, [currentTrackId, playableTracks]);
+  // Optional logic removed since global playback persists
 
   useEffect(() => {
     if (!selectedPlaylistId) return;
@@ -189,113 +255,15 @@ export default function RoomPlaylistManager({
   }, [selectedPlaylistId]);
 
   useEffect(() => {
-    const audio = getSharedAudio();
-    audioRef.current = audio;
-
-    return () => {
-      audioRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const handleEnded = () => {
-      if (!currentTrackId || playableTracks.length === 0) {
-        setPlayingUrl(null);
-        setCurrentTrackId(null);
-        return;
-      }
-
-      const currentIndex = playableTracks.findIndex(
-        (track) => track.id === currentTrackId,
-      );
-
-      if (playbackMode === "off") {
-        setPlayingUrl(null);
-        setCurrentTrackId(null);
-        return;
-      }
-
-      if (playbackMode === "repeat-one") {
-        const currentTrack =
-          currentIndex >= 0 ? playableTracks[currentIndex] : playableTracks[0];
-        if (currentTrack?.preview_url) {
-          audio.src = currentTrack.preview_url;
-          void audio.play().catch(() => {
-            addToast("Không thể phát preview.", "error");
-          });
-          setPlayingUrl(currentTrack.preview_url);
-          setCurrentTrackId(currentTrack.id);
-        }
-        return;
-      }
-
-      if (playbackMode === "shuffle") {
-        let randomIndex = Math.floor(Math.random() * playableTracks.length);
-        if (playableTracks.length > 1 && currentIndex >= 0) {
-          while (randomIndex === currentIndex) {
-            randomIndex = Math.floor(Math.random() * playableTracks.length);
-          }
-        }
-        const randomTrack = playableTracks[randomIndex];
-        if (randomTrack?.preview_url) {
-          audio.src = randomTrack.preview_url;
-          void audio.play().catch(() => {
-            addToast("Không thể phát preview.", "error");
-          });
-          setPlayingUrl(randomTrack.preview_url);
-          setCurrentTrackId(randomTrack.id);
-        }
-        return;
-      }
-
-      const nextIndex =
-        currentIndex >= 0 ? (currentIndex + 1) % playableTracks.length : 0;
-      const nextTrack = playableTracks[nextIndex];
-      if (nextTrack?.preview_url) {
-        audio.src = nextTrack.preview_url;
-        void audio.play().catch(() => {
-          addToast("Không thể phát preview.", "error");
-        });
-        setPlayingUrl(nextTrack.preview_url);
-        setCurrentTrackId(nextTrack.id);
-      }
-    };
-
-    audio.addEventListener("ended", handleEnded);
-    return () => {
-      audio.removeEventListener("ended", handleEnded);
-    };
-  }, [addToast, currentTrackId, playbackMode, playableTracks]);
-
-  const playTrack = (track: PlaylistTrackRecord | null) => {
-    if (!track?.preview_url) return;
-
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    audio.src = track.preview_url;
-    audio.play().catch(() => addToast("Không thể phát preview.", "error"));
-    setPlayingUrl(track.preview_url);
-    setCurrentTrackId(track.id);
-  };
+    setPlaylistTracks(playableTracks);
+  }, [playableTracks, setPlaylistTracks]);
 
   const handlePlayPreview = (url: string) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
     if (playingUrl === url && !currentTrackId) {
-      audio.pause();
-      setPlayingUrl(null);
+      playPreview(null);
       return;
     }
-
-    audio.src = url;
-    audio.play().catch(() => addToast("Không thể phát preview.", "error"));
-    setPlayingUrl(url);
-    setCurrentTrackId(null);
+    playPreview(url);
   };
 
   const handlePlayPlaylistTrack = (track: PlaylistTrackRecord) => {
@@ -303,59 +271,15 @@ export default function RoomPlaylistManager({
       addToast("Bài này hiện chưa có nguồn phát trực tiếp trong app.", "error");
       return;
     }
-
-    const audio = audioRef.current;
-    if (!audio) return;
-
     if (currentTrackId === track.id && playingUrl === track.preview_url) {
-      audio.pause();
-      setPlayingUrl(null);
-      setCurrentTrackId(null);
+      playTrack(null);
       return;
     }
-
     playTrack(track);
   };
 
-  const handlePlayPrevious = () => {
-    if (playableTracks.length === 0) {
-      addToast("Playlist chưa có bài có thể phát.", "error");
-      return;
-    }
-
-    const currentIndex = playableTracks.findIndex(
-      (track) => track.id === currentTrackId,
-    );
-    const prevIndex =
-      currentIndex > 0 ? currentIndex - 1 : playableTracks.length - 1;
-    playTrack(playableTracks[prevIndex] ?? playableTracks[0]);
-  };
-
-  const handlePlayNext = () => {
-    if (playableTracks.length === 0) {
-      addToast("Playlist chưa có bài có thể phát.", "error");
-      return;
-    }
-
-    const currentIndex = playableTracks.findIndex(
-      (track) => track.id === currentTrackId,
-    );
-
-    if (playbackMode === "shuffle" && playableTracks.length > 1) {
-      let randomIndex = Math.floor(Math.random() * playableTracks.length);
-      if (currentIndex >= 0) {
-        while (randomIndex === currentIndex) {
-          randomIndex = Math.floor(Math.random() * playableTracks.length);
-        }
-      }
-      playTrack(playableTracks[randomIndex] ?? null);
-      return;
-    }
-
-    const nextIndex =
-      currentIndex >= 0 ? (currentIndex + 1) % playableTracks.length : 0;
-    playTrack(playableTracks[nextIndex] ?? null);
-  };
+  const handlePlayPrevious = () => playPrevious();
+  const handlePlayNext = () => playNext();
 
   const handleCreatePlaylist = () => {
     if (!newPlaylistName.trim()) {
@@ -621,8 +545,8 @@ export default function RoomPlaylistManager({
       visibleResults={visibleResults}
       isTrendingLoading={isTrendingLoading}
       onSearchQueryChange={setSearchQuery}
-      onSearch={() => {
-        void handleSearch();
+      onSearch={(override) => {
+        void handleSearch(override);
       }}
       onSelectTab={handleSelectDiscoveryTab}
       onOpenCreateModal={() => {
@@ -636,6 +560,8 @@ export default function RoomPlaylistManager({
       onPlayPreview={handlePlayPreview}
       playingUrl={playingUrl}
       onOpenAddTrack={handleOpenAddTrack}
+      onPlayFull={handlePlayFullTrack}
+      canPlayFull={canPlayFullTrack}
       trendingCountry={trendingCountry}
       onTrendingCountryChange={handleTrendingCountryChange}
     />
@@ -684,21 +610,23 @@ export default function RoomPlaylistManager({
           </div>
         ) : (
           playlists.map((playlist) => (
-            <button
+            <div
               key={playlist.id}
-              type="button"
-              onClick={() => {
-                setSelectedPlaylistId(playlist.id);
-                setIsDetailModalOpen(true);
-              }}
-              className={`w-full rounded-[22px] border px-4 py-3 text-left transition-all ${
+              className={`w-full rounded-[22px] border px-4 py-3 transition-all ${
                 playlist.id === selectedPlaylistId
                   ? "border-emerald-400 bg-emerald-50 shadow-[0_4px_16px_-8px_rgba(16,185,129,0.35)]"
                   : "border-border bg-white/70 hover:border-emerald-300"
               }`}
             >
               <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPlaylistId(playlist.id);
+                    setIsDetailModalOpen(true);
+                  }}
+                  className="min-w-0 flex-1 text-left"
+                >
                   <p className="truncate text-sm font-semibold text-foreground">
                     🎵 {playlist.name}
                   </p>
@@ -708,12 +636,11 @@ export default function RoomPlaylistManager({
                   <p className="mt-1.5 text-[11px] text-text-muted">
                     {(playlist.tracks ?? []).length} bài
                   </p>
-                </div>
+                </button>
                 <div className="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
+                    onClick={() => {
                       setSelectedPlaylistId(playlist.id);
                       setIsEditModalOpen(true);
                     }}
@@ -725,8 +652,7 @@ export default function RoomPlaylistManager({
                   </button>
                   <button
                     type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
+                    onClick={() => {
                       handleDeletePlaylist(playlist.id);
                     }}
                     className="rounded-full border border-border p-1.5 text-text-muted hover:border-rose-400 hover:text-rose-500"
@@ -737,7 +663,7 @@ export default function RoomPlaylistManager({
                   </button>
                 </div>
               </div>
-            </button>
+            </div>
           ))
         )}
       </div>
@@ -925,6 +851,8 @@ export default function RoomPlaylistManager({
                     onPlayPreview={handlePlayPreview}
                     isPlayingPreview={playingUrl === track.preview_url}
                     onOpenAddTrack={handleOpenAddTrack}
+                    onPlayFull={handlePlayFullTrack}
+                    canPlayFull={canPlayFullTrack(track)}
                   />
                 ))}
               </div>
@@ -1013,6 +941,8 @@ export default function RoomPlaylistManager({
                       index={index}
                       isPlaying={currentTrackId === track.id}
                       onPlayTrack={handlePlayPlaylistTrack}
+                      onPlayFull={handlePlayFullTrack}
+                      canPlayFull={canPlayFullTrack(track)}
                       onRemove={handleRemoveTrack}
                       isPending={isPending}
                     />
@@ -1020,6 +950,44 @@ export default function RoomPlaylistManager({
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {fullTrack ? (
+        <div className="fixed inset-0 z-[96] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl border border-border bg-white p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="truncate text-sm font-semibold text-foreground">
+                🎧 {fullTrack.title}
+              </p>
+              <button
+                type="button"
+                onClick={() => setFullTrack(null)}
+                className="rounded-full border border-border px-3 py-1 text-xs text-text-secondary"
+              >
+                Đóng
+              </button>
+            </div>
+            <p className="mb-2 text-[11px] text-text-muted">
+              Nguồn: {fullTrack.source} (nghe full)
+            </p>
+            {fullTrack.isAudio ? (
+              <audio
+                src={fullTrack.embedUrl}
+                controls
+                autoPlay
+                className="w-full"
+              />
+            ) : (
+              <iframe
+                src={fullTrack.embedUrl}
+                title={`full-track-${fullTrack.source}`}
+                allow="autoplay; encrypted-media; picture-in-picture"
+                allowFullScreen
+                className="h-[360px] w-full rounded-xl border border-border"
+              />
+            )}
           </div>
         </div>
       ) : null}

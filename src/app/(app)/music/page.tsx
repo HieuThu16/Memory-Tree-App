@@ -3,6 +3,7 @@ import { getUserRooms } from "@/lib/supabase/queries/rooms";
 import { getRoomPlaylists } from "@/lib/supabase/queries/playlists";
 import { redirect } from "next/navigation";
 import MusicClientPage from "./MusicClientPage";
+import MusicParticles from "@/components/ui/MusicParticles";
 
 export const dynamic = "force-dynamic";
 
@@ -23,11 +24,16 @@ export default async function MusicPage({
     : [];
 
   return (
-    <MusicClientPage
-      user={user}
-      rooms={rooms}
-      activeRoomId={activeRoomId}
-      initialPlaylists={initialPlaylists}
-    />
+    <main className="relative min-h-screen">
+      <MusicParticles />
+      <div className="relative z-10">
+        <MusicClientPage
+          user={user}
+          rooms={rooms}
+          activeRoomId={activeRoomId}
+          initialPlaylists={initialPlaylists}
+        />
+      </div>
+    </main>
   );
 }

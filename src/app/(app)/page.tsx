@@ -2,10 +2,14 @@ import {
   getPersonalMemories,
   getMemoryStats,
 } from "@/lib/supabase/queries/memories";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   const [memories, stats] = await Promise.all([
     getPersonalMemories(),
     getMemoryStats(),
@@ -29,7 +33,7 @@ export default async function HomePage() {
           </div>
         </div>
 
-        <ClientSection memories={memories} />
+        <ClientSection memories={memories} currentUserId={user?.id ?? null} />
       </section>
     </main>
   );

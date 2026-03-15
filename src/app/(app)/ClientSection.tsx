@@ -1,7 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import MemoryTree from "@/components/tree/MemoryTree";
+import dynamic from "next/dynamic";
+import NatureParticles from "@/components/ui/NatureParticles";
+
+const MemoryTree = dynamic(() => import("@/components/tree/MemoryTree"), { 
+  ssr: false, 
+  loading: () => (
+    <div className="flex items-center justify-center min-h-[50vh] text-text-muted animate-pulse">
+      Đang tải cây kỉ niệm...
+    </div>
+  )
+});
+
+const MemoryMap = dynamic(() => import("@/components/memory/MemoryMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center min-h-[50vh] text-text-muted animate-pulse">
+      Đang tải bản đồ kỷ niệm...
+    </div>
+  ),
+});
+
 import MemoryGallery from "@/components/memory/MemoryGallery";
 import type { MemoryRecord } from "@/lib/types";
 import { useMemoryStore } from "@/lib/stores/memoryStore";
@@ -9,15 +29,17 @@ import { useTreeStore } from "@/lib/stores/treeStore";
 
 export default function ClientSection({
   memories,
+  currentUserId,
 }: {
   memories: MemoryRecord[];
+  currentUserId: string | null;
 }) {
   const openCreate = useTreeStore((s) => s.openCreate);
   const hydrateScope = useMemoryStore((s) => s.hydrateScope);
   const scopedMemories = useMemoryStore((s) =>
     s.scopeKey === "personal" ? s.memories : memories,
   );
-  const [viewMode, setViewMode] = useState<"tree" | "gallery">("tree");
+  const [viewMode, setViewMode] = useState<"tree" | "gallery" | "map">("tree");
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
@@ -36,7 +58,8 @@ export default function ClientSection({
 
   return (
     <section className="glass-card overflow-hidden rounded-2xl p-2.5 sm:rounded-[30px] sm:p-4">
-      <div className="flex flex-col gap-3">
+      <NatureParticles />
+      <div className="flex flex-col gap-3 relative z-10">
         {/* Top Controls: Stats & Add */}
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-[10px] font-semibold text-white shadow-[0_12px_24px_-16px_rgba(108,76,215,0.9)]">
@@ -56,7 +79,7 @@ export default function ClientSection({
           <div className="relative flex-1">
             <input
               type="text"
-              placeholder="Tìm kỉ niệm (Vd: Du lịch ✈️, Sinh nhật 🎂)..."
+              placeholder="Tìm kỉ niệm (Vd: Du lịch)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="input-field w-full !rounded-xl !py-2 !pl-8 !text-xs"
@@ -88,6 +111,17 @@ export default function ClientSection({
             >
               🖼️
             </button>
+            <button
+              onClick={() => setViewMode("map")}
+              className={`rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
+                viewMode === "map"
+                  ? "bg-accent text-white shadow-sm"
+                  : "text-text-secondary hover:bg-white"
+              }`}
+              title="Bản đồ kỷ niệm"
+            >
+              🗺️
+            </button>
           </div>
         </div>
       </div>
@@ -95,10 +129,13 @@ export default function ClientSection({
       {/* Content View */}
       <div className="mt-3 rounded-2xl bg-white/58 p-1.5 sm:p-2 min-h-[50vh]">
         <div className={viewMode === "tree" ? "" : "hidden"}>
-          <MemoryTree memories={filteredMemories} />
+          <MemoryTree memories={filteredMemories} currentUserId={currentUserId ?? undefined} />
         </div>
         {viewMode === "gallery" && (
           <MemoryGallery memories={filteredMemories} />
+        )}
+        {viewMode === "map" && (
+          <MemoryMap memories={filteredMemories} />
         )}
       </div>
     </section>

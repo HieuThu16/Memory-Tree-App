@@ -27,22 +27,41 @@ type Props = {
   onPlansCountChange?: (count: number) => void;
 };
 
-type PlanFilter = "all" | "pending" | "completed";
+// Sprout icons for pending plans – each plan gets a different sprout based on its index
+const SPROUT_ICONS = ["🌱", "🌿", "☘️", "🍀", "🌾", "🪴", "🎋", "🎍", "🌵", "🪻"];
+// Flower icons for completed plans – each plan blooms into a different flower
+const FLOWER_ICONS = ["🌸", "🌺", "🌻", "🌼", "🌷", "🌹", "💐", "🪷", "🏵️", "💮"];
 
-function CheckCircle({ checked }: { checked: boolean }) {
+// Simple hash to deterministically assign an icon based on plan title
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function PlanIcon({ title, isCompleted }: { title: string; isCompleted: boolean }) {
+  const idx = hashString(title);
+  const icon = isCompleted
+    ? FLOWER_ICONS[idx % FLOWER_ICONS.length]
+    : SPROUT_ICONS[idx % SPROUT_ICONS.length];
+
   return (
     <span
-      className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-bold ${
-        checked
-          ? "border-emerald-500 bg-emerald-500 text-white"
-          : "border-border bg-white text-transparent"
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-lg transition-all duration-300 ${
+        isCompleted
+          ? "bg-gradient-to-br from-pink-100 to-rose-100 shadow-[0_2px_8px_-2px_rgba(244,114,182,0.4)] scale-110"
+          : "bg-gradient-to-br from-emerald-50 to-lime-50 shadow-[0_2px_8px_-2px_rgba(34,197,94,0.3)]"
       }`}
-      aria-hidden="true"
+      title={isCompleted ? "Đã nở hoa 🌸" : "Đang nảy mầm 🌱"}
     >
-      ✓
+      {icon}
     </span>
   );
 }
+
+type PlanFilter = "all" | "pending" | "completed";
 
 export default function RoomPlansBoard({
   roomId,
@@ -55,11 +74,25 @@ export default function RoomPlansBoard({
   const [plans, setPlans] = useState<RoomPlanRecord[]>(initialPlans);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("Dự định gần");
   const [detailPlanId, setDetailPlanId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingDescription, setEditingDescription] = useState("");
+  const [editingCategory, setEditingCategory] = useState("Dự định gần");
   const [planFilter, setPlanFilter] = useState<PlanFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [isPending, startTransition] = useTransition();
+
+  const parsePlanDescription = (desc: string | null) => {
+    if (!desc) return { cat: "Dự định gần", text: "" };
+    const match = desc.match(/^##CAT:(.*)##\n([\s\S]*)$/);
+    if (match) return { cat: match[1], text: match[2] };
+    return { cat: "Dự định gần", text: desc };
+  };
+
+  const formatPlanDescription = (cat: string, text: string) => {
+    return `##CAT:${cat}##\n${text}`;
+  };
 
   useEffect(() => {
     setPlans(initialPlans);
@@ -142,20 +175,25 @@ export default function RoomPlansBoard({
   );
 
   const filteredPlans = useMemo(() => {
+    let result = plans;
+
     if (planFilter === "pending") {
-      return plans.filter((plan) => !plan.is_completed);
+      result = result.filter((plan) => !plan.is_completed);
+    } else if (planFilter === "completed") {
+      result = result.filter((plan) => plan.is_completed);
     }
 
-    if (planFilter === "completed") {
-      return plans.filter((plan) => plan.is_completed);
+    if (categoryFilter !== "all") {
+      result = result.filter((plan) => parsePlanDescription(plan.description).cat === categoryFilter);
     }
 
-    return plans;
-  }, [planFilter, plans]);
+    return result;
+  }, [planFilter, categoryFilter, plans]);
 
   useEffect(() => {
     setEditingTitle(selectedPlan?.title ?? "");
-    setEditingDescription(selectedPlan?.description ?? "");
+    setEditingDescription(parsePlanDescription(selectedPlan?.description ?? "").text);
+    setEditingCategory(parsePlanDescription(selectedPlan?.description ?? "").cat);
   }, [selectedPlan]);
 
   const getDisplayName = (userId: string | null) => {
@@ -178,7 +216,7 @@ export default function RoomPlansBoard({
           room_id: roomId,
           added_by: currentUserId,
           title: resolvedTitle,
-          description: description.trim() || null,
+          description: formatPlanDescription(category, description.trim()),
         })
         .select(
           "id, room_id, added_by, title, description, is_completed, completed_by, completed_at, created_at, updated_at",
@@ -260,7 +298,7 @@ export default function RoomPlansBoard({
         .from("room_plans")
         .update({
           title: resolvedTitle,
-          description: editingDescription.trim() || null,
+          description: formatPlanDescription(editingCategory, editingDescription.trim()),
           updated_at: new Date().toISOString(),
         })
         .eq("id", selectedPlan.id)
@@ -321,7 +359,7 @@ export default function RoomPlansBoard({
 
       <div className="rounded-2xl border border-border bg-white/85 p-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
-          ✅ Dự định chung
+          🌱 Gieo hạt dự định
         </p>
         <div className="mt-2 grid gap-2">
           <input
@@ -332,6 +370,16 @@ export default function RoomPlansBoard({
             disabled={isPending}
             className="input-field !rounded-xl !py-2.5 text-sm"
           />
+          <select
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+            disabled={isPending}
+            className="input-field !rounded-xl !py-2.5 text-sm"
+          >
+            <option value="Dự định gần">Dự định gần</option>
+            <option value="1-2 năm">1-2 năm</option>
+            <option value="5-10 năm">5-10 năm</option>
+          </select>
           <textarea
             value={description}
             onChange={(event) => setDescription(event.target.value)}
@@ -346,7 +394,7 @@ export default function RoomPlansBoard({
             disabled={isPending}
             className="btn-primary rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-60"
           >
-            {isPending ? "Đang thêm..." : "✨ Thêm dự định"}
+            {isPending ? "Đang gieo..." : "🌱 Gieo mầm dự định"}
           </button>
         </div>
       </div>
@@ -392,6 +440,22 @@ export default function RoomPlansBoard({
               Đã xong
             </button>
           </div>
+          <div className="inline-flex flex-wrap gap-1.5 mt-2 w-full border-t border-border pt-2">
+            <span className="text-[10px] text-text-muted mr-1 my-auto">Loại:</span>
+            {["all", "Dự định gần", "1-2 năm", "5-10 năm"].map((cat) => (
+               <button
+                 key={cat}
+                 onClick={() => setCategoryFilter(cat)}
+                 className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition border ${
+                   categoryFilter === cat
+                     ? "border-accent bg-accent text-white"
+                     : "border-border bg-white text-text-secondary hover:border-accent"
+                 }`}
+               >
+                 {cat === "all" ? "Tất cả kỳ hạn" : cat}
+               </button>
+            ))}
+          </div>
         </div>
 
         {filteredPlans.length === 0 ? (
@@ -419,7 +483,7 @@ export default function RoomPlansBoard({
                         : "Đánh dấu hoàn thành"
                     }
                   >
-                    <CheckCircle checked={plan.is_completed} />
+                    <PlanIcon title={plan.title} isCompleted={plan.is_completed} />
                   </button>
                   <button
                     type="button"
@@ -436,12 +500,17 @@ export default function RoomPlansBoard({
                       {plan.title}
                     </p>
                     <p className="mt-1 truncate text-xs text-text-secondary">
-                      {plan.description || "Chưa có mô tả"}
+                      {parsePlanDescription(plan.description).text || "Chưa có mô tả"}
                     </p>
-                    <p className="mt-1 text-[11px] text-text-muted">
-                      Thêm bởi {getDisplayName(plan.added_by)} ·{" "}
-                      {formatDateTime(plan.created_at)}
-                    </p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="rounded-full bg-emerald-50 text-emerald-700 px-1.5 py-0.5 text-[9px] font-semibold">
+                        {parsePlanDescription(plan.description).cat}
+                      </span>
+                      <p className="text-[11px] text-text-muted">
+                        Thêm bởi {getDisplayName(plan.added_by)} ·{" "}
+                        {formatDateTime(plan.created_at)}
+                      </p>
+                    </div>
                   </button>
                   <button
                     type="button"
@@ -492,6 +561,22 @@ export default function RoomPlansBoard({
 
               <div className="rounded-2xl border border-border bg-white/85 p-3">
                 <label className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-muted">
+                  Kỳ hạn
+                </label>
+                <select
+                  value={editingCategory}
+                  onChange={(event) => setEditingCategory(event.target.value)}
+                  disabled={isPending}
+                  className="input-field mt-2 !rounded-xl !py-2.5 text-sm"
+                >
+                  <option value="Dự định gần">Dự định gần</option>
+                  <option value="1-2 năm">1-2 năm</option>
+                  <option value="5-10 năm">5-10 năm</option>
+                </select>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-white/85 p-3">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-muted">
                   Mô tả
                 </label>
                 <textarea
@@ -528,7 +613,7 @@ export default function RoomPlansBoard({
                   disabled={isPending}
                   className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-2 text-xs font-semibold text-text-secondary"
                 >
-                  <CheckCircle checked={selectedPlan.is_completed} />
+                  <PlanIcon title={selectedPlan.title} isCompleted={selectedPlan.is_completed} />
                   <span>
                     {selectedPlan.is_completed
                       ? "Bỏ đánh dấu"

@@ -1,12 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import MemoryTree from "@/components/tree/MemoryTree";
 import MemoryGallery from "@/components/memory/MemoryGallery";
 import type { MemoryParticipant, MemoryRecord } from "@/lib/types";
 import { useMemoryStore } from "@/lib/stores/memoryStore";
 import { useTreeStore } from "@/lib/stores/treeStore";
 import ConnectedUsersBanner from "@/components/realtime/ConnectedUsersBanner";
+import MusicSyncProvider from "@/components/music/MusicSyncProvider";
+
+const MemoryMap = dynamic(() => import("@/components/memory/MemoryMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center min-h-[50vh] text-text-muted animate-pulse">
+      Đang tải bản đồ kỷ niệm...
+    </div>
+  ),
+});
 
 export default function RoomClientSection({
   memories,
@@ -42,7 +53,7 @@ export default function RoomClientSection({
       ) ?? null,
     [currentUserId, participants],
   );
-  const [memoryViewMode, setMemoryViewMode] = useState<"tree" | "gallery">(
+  const [memoryViewMode, setMemoryViewMode] = useState<"tree" | "gallery" | "map">(
     "tree",
   );
   const [searchQuery, setSearchQuery] = useState("");
@@ -149,6 +160,17 @@ export default function RoomClientSection({
             >
               🖼️
             </button>
+            <button
+              onClick={() => setMemoryViewMode("map")}
+              className={`rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
+                memoryViewMode === "map"
+                  ? "bg-accent text-white shadow-sm"
+                  : "text-text-secondary hover:bg-white"
+              }`}
+              title="Bản đồ kỷ niệm"
+            >
+              🗺️
+            </button>
           </div>
         </div>
       </div>
@@ -161,10 +183,17 @@ export default function RoomClientSection({
             participants={participants}
             participantsByUserId={participantsByUserId}
             isTwoPerson={isTwoPerson}
+            currentUserId={currentUserId}
           />
         </div>
         {memoryViewMode === "gallery" && (
           <MemoryGallery
+            memories={filteredMemories}
+            participantsByUserId={participantsByUserId}
+          />
+        )}
+        {memoryViewMode === "map" && (
+          <MemoryMap
             memories={filteredMemories}
             participantsByUserId={participantsByUserId}
           />

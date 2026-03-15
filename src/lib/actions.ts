@@ -9,6 +9,8 @@ import type {
   PlaylistRecord,
   PlaylistTrackRecord,
   RoomSummary,
+  CommentRecord,
+  CommentWithAuthor,
 } from "@/lib/types";
 import { MEMORY_SELECT, PLAYLIST_SELECT } from "@/lib/supabase/selects";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -27,6 +29,8 @@ const memoryFieldLabels: Record<string, string> = {
   title: "tiêu đề",
   content: "nội dung",
   category: "thể loại",
+  with_whom: "với ai",
+  event_time: "giờ",
   location: "địa điểm",
   date: "ngày",
   type: "loại",
@@ -65,7 +69,7 @@ async function getMemoryForMutation(
   const { data, error } = await supabase
     .from("memories")
     .select(
-      "id, user_id, room_id, parent_id, title, content, category, location, date, type, created_at",
+      "id, user_id, room_id, parent_id, title, content, category, with_whom, event_time, location, date, type, created_at",
     )
     .eq("id", memoryId)
     .single();
@@ -138,6 +142,8 @@ export async function createMemory(input: CreateMemoryInput) {
       title: input.title,
       content: input.content ?? null,
       category: input.room_id ? null : input.category?.trim() || null,
+      with_whom: input.with_whom?.trim() || null,
+      event_time: input.event_time?.trim() || null,
       location: input.location?.trim() || null,
       type: input.type,
       date: input.date || new Date().toISOString(),
@@ -208,6 +214,8 @@ export async function updateMemory(
     title: updates.title?.trim(),
     content: updates.content?.trim() || null,
     category: updates.category?.trim() || null,
+    with_whom: updates.with_whom?.trim() || null,
+    event_time: updates.event_time?.trim() || null,
     location: updates.location?.trim() || null,
     type: updates.type,
     date: updates.date,
@@ -217,6 +225,8 @@ export async function updateMemory(
     title: formatComparableValue(existingMemory.title),
     content: formatComparableValue(existingMemory.content),
     category: formatComparableValue(existingMemory.category),
+    with_whom: formatComparableValue(existingMemory.with_whom),
+    event_time: formatComparableValue(existingMemory.event_time),
     location: formatComparableValue(existingMemory.location),
     type: formatComparableValue(existingMemory.type),
     date: formatComparableValue(existingMemory.date),
@@ -232,6 +242,14 @@ export async function updateMemory(
       updates.category !== undefined
         ? payload.category
         : comparableBefore.category,
+    with_whom:
+      updates.with_whom !== undefined
+        ? payload.with_whom
+        : comparableBefore.with_whom,
+    event_time:
+      updates.event_time !== undefined
+        ? payload.event_time
+        : comparableBefore.event_time,
     location:
       updates.location !== undefined
         ? payload.location
@@ -911,4 +929,195 @@ export async function removeTrackFromPlaylist(trackId: string) {
     success: true,
     data: { id: trackId, playlist_id: track?.playlist_id ?? null },
   };
+}
+
+// ─── COMMENT CRUD ────────────────────────────────────────────────────
+
+const COMMENT_SELECT =
+  "id, memory_id, user_id, room_id, content, created_at, updated_at, comment_media(id, comment_id, storage_path, media_type, created_at)";
+
+export async function fetchComments(
+  memoryId: string,
+): Promise<{ data: CommentWithAuthor[]; error?: string }> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { data: [], error: "Not authenticated" };
+  }
+
+  const { data: comments, error } = await supabase
+    .from("memory_comments")
+    .select(COMMENT_SELECT)
+    .eq("memory_id", memoryId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    return { data: [], error: error.message };
+  }
+
+  if (!comments || comments.length === 0) {
+    return { data: [] };
+  }
+
+  // Fetch author profiles
+  const userIds = [...new Set(comments.map((c: CommentRecord) => c.user_id))];
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, display_name, avatar_url")
+    .in("id", userIds);
+
+  const profileMap = new Map(
+    (profiles ?? []).map(
+      (p: {
+        id: string;
+        display_name: string | null;
+        avatar_url: string | null;
+      }) => [p.id, p],
+    ),
+  );
+
+  const enriched: CommentWithAuthor[] = (comments as CommentRecord[]).map(
+    (c) => {
+      const profile = profileMap.get(c.user_id);
+      return {
+        ...c,
+        author_name: profile?.display_name ?? "Ẩn danh",
+        author_avatar: profile?.avatar_url ?? null,
+      };
+    },
+  );
+
+  return { data: enriched };
+}
+
+export async function createComment(input: {
+  memoryId: string;
+  content: string;
+  roomId?: string | null;
+}) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data, error } = await supabase
+    .from("memory_comments")
+    .insert({
+      memory_id: input.memoryId,
+      user_id: user.id,
+      room_id: input.roomId ?? null,
+      content: input.content.trim(),
+    })
+    .select(COMMENT_SELECT)
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  const displayName = await getCurrentUserDisplayName(supabase, user);
+
+  const enriched: CommentWithAuthor = {
+    ...(data as CommentRecord),
+    author_name: displayName,
+    author_avatar: null,
+  };
+
+  return { data: enriched };
+}
+
+export async function updateComment(commentId: string, content: string) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { data, error } = await supabase
+    .from("memory_comments")
+    .update({
+      content: content.trim(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", commentId)
+    .eq("user_id", user.id)
+    .select(COMMENT_SELECT)
+    .single();
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { data: data as CommentRecord };
+}
+
+export async function deleteComment(commentId: string) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  // Delete associated media from storage first
+  const { data: mediaItems } = await supabase
+    .from("comment_media")
+    .select("storage_path")
+    .eq("comment_id", commentId);
+
+  if (mediaItems && mediaItems.length > 0) {
+    const storagePaths = mediaItems.map(
+      (m: { storage_path: string }) => m.storage_path,
+    );
+    await supabase.storage.from("media").remove(storagePaths);
+  }
+
+  const { error } = await supabase
+    .from("memory_comments")
+    .delete()
+    .eq("id", commentId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { success: true, data: { id: commentId } };
+}
+
+export async function saveCommentMedia(
+  items: {
+    comment_id: string;
+    storage_path: string;
+    media_type: string;
+  }[],
+) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: "Not authenticated" };
+  }
+
+  const { error } = await supabase.from("comment_media").insert(items);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { success: true };
 }

@@ -1,77 +1,34 @@
 import { NextResponse } from "next/server";
+import ytSearch from "yt-search";
 import type { MusicSearchResult } from "@/lib/types";
 
-function normalizeItunesTrack(
-  track: Record<string, unknown>,
-): MusicSearchResult {
-  return {
-    source: "itunes",
-    source_track_id: String(
-      track.trackId ?? track.collectionId ?? track.artistId,
-    ),
-    title: String(track.trackName ?? "Unknown track"),
-    artist: typeof track.artistName === "string" ? track.artistName : null,
-    album:
-      typeof track.collectionName === "string" ? track.collectionName : null,
-    artwork_url:
-      typeof track.artworkUrl100 === "string"
-        ? track.artworkUrl100.replace("100x100", "300x300")
-        : null,
-    preview_url: typeof track.previewUrl === "string" ? track.previewUrl : null,
-    external_url:
-      typeof track.trackViewUrl === "string" ? track.trackViewUrl : null,
-    duration_ms:
-      typeof track.trackTimeMillis === "number" ? track.trackTimeMillis : null,
-  };
+export const dynamic = "force-dynamic";
+
+// In-memory cache for search results (LRU-style with TTL)
+const searchCache = new Map<
+  string,
+  { data: MusicSearchResult[]; ts: number }
+>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_CACHE_SIZE = 50;
+
+function getCached(key: string): MusicSearchResult[] | null {
+  const entry = searchCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > CACHE_TTL) {
+    searchCache.delete(key);
+    return null;
+  }
+  return entry.data;
 }
 
-function normalizeDeezerTrack(
-  track: Record<string, unknown>,
-): MusicSearchResult {
-  const album =
-    track.album && typeof track.album === "object"
-      ? (track.album as Record<string, unknown>)
-      : null;
-  const artist =
-    track.artist && typeof track.artist === "object"
-      ? (track.artist as Record<string, unknown>)
-      : null;
-
-  return {
-    source: "deezer",
-    source_track_id: String(track.id ?? track.md5_image ?? track.link),
-    title: String(track.title ?? "Unknown track"),
-    artist: typeof artist?.name === "string" ? artist.name : null,
-    album: typeof album?.title === "string" ? album.title : null,
-    artwork_url:
-      typeof album?.cover_medium === "string"
-        ? album.cover_medium
-        : typeof album?.cover === "string"
-          ? album.cover
-          : null,
-    preview_url: typeof track.preview === "string" ? track.preview : null,
-    external_url: typeof track.link === "string" ? track.link : null,
-    duration_ms:
-      typeof track.duration === "number" ? track.duration * 1000 : null,
-  };
-}
-
-function normalizeJamendoTrack(
-  track: Record<string, unknown>,
-): MusicSearchResult {
-  return {
-    source: "jamendo",
-    source_track_id: String(track.id ?? ""),
-    title: String(track.name ?? "Unknown track"),
-    artist: typeof track.artist_name === "string" ? track.artist_name : null,
-    album: typeof track.album_name === "string" ? track.album_name : null,
-    artwork_url:
-      typeof track.album_image === "string" ? track.album_image : null,
-    preview_url: typeof track.audio === "string" ? track.audio : null,
-    external_url: typeof track.shareurl === "string" ? track.shareurl : null,
-    duration_ms:
-      typeof track.duration === "number" ? track.duration * 1000 : null,
-  };
+function setCache(key: string, data: MusicSearchResult[]) {
+  // Simple LRU eviction
+  if (searchCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = searchCache.keys().next().value;
+    if (firstKey) searchCache.delete(firstKey);
+  }
+  searchCache.set(key, { data, ts: Date.now() });
 }
 
 export async function GET(request: Request) {
@@ -82,51 +39,49 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: [] });
   }
 
-  const encodedQuery = encodeURIComponent(query);
-  const [itunesResult, deezerResult, jamendoResult] = await Promise.allSettled([
-    fetch(
-      `https://itunes.apple.com/search?term=${encodedQuery}&entity=song&limit=8`,
-      { next: { revalidate: 300 } },
-    ),
-    fetch(`https://api.deezer.com/search?q=${encodedQuery}&limit=8`, {
-      next: { revalidate: 300 },
-    }),
-    fetch(
-      `https://api.jamendo.com/v3.0/tracks/?client_id=b6747d04&format=json&limit=8&namesearch=${encodedQuery}&include=musicinfo&audioformat=mp32`,
-      { next: { revalidate: 300 } },
-    ),
-  ]);
-
-  const items: MusicSearchResult[] = [];
-
-  if (itunesResult.status === "fulfilled" && itunesResult.value.ok) {
-    const payload = (await itunesResult.value.json()) as {
-      results?: Record<string, unknown>[];
-    };
-    items.push(...(payload.results ?? []).map(normalizeItunesTrack));
+  // Check cache first
+  const cacheKey = `search:${query.toLowerCase()}`;
+  const cached = getCached(cacheKey);
+  if (cached) {
+    return NextResponse.json({ data: cached, meta: { cached: true } });
   }
 
-  if (deezerResult.status === "fulfilled" && deezerResult.value.ok) {
-    const payload = (await deezerResult.value.json()) as {
-      data?: Record<string, unknown>[];
-    };
-    items.push(...(payload.data ?? []).map(normalizeDeezerTrack));
+  try {
+    // Search with music-specific keywords for better results
+    const musicQuery =
+      query.includes("official") ||
+      query.includes("MV") ||
+      query.includes("audio")
+        ? query
+        : `${query} official audio`;
+
+    const r = await ytSearch(musicQuery);
+    const videos = r.videos.slice(0, 30);
+
+    const data: MusicSearchResult[] = videos.map((v) => ({
+      source: "youtube",
+      source_track_id: v.videoId,
+      title: v.title,
+      artist: v.author.name,
+      album: null,
+      artwork_url: v.thumbnail ?? null,
+      preview_url: `/api/music/play?id=${v.videoId}`,
+      external_url: v.url,
+      duration_ms: v.seconds * 1000,
+    }));
+
+    // Deduplicate by videoId
+    const deduped = Array.from(
+      new Map(
+        data.map((item) => [`${item.source}:${item.source_track_id}`, item]),
+      ).values(),
+    );
+
+    setCache(cacheKey, deduped);
+
+    return NextResponse.json({ data: deduped });
+  } catch (error) {
+    console.error("YTSearch Error:", error);
+    return NextResponse.json({ data: [] }, { status: 500 });
   }
-
-  if (jamendoResult.status === "fulfilled" && jamendoResult.value.ok) {
-    const payload = (await jamendoResult.value.json()) as {
-      results?: Record<string, unknown>[];
-    };
-    items.push(...(payload.results ?? []).map(normalizeJamendoTrack));
-  }
-
-  const deduped = Array.from(
-    new Map(
-      items
-        .filter((item) => item.title && item.source_track_id)
-        .map((item) => [`${item.source}:${item.source_track_id}`, item]),
-    ).values(),
-  );
-
-  return NextResponse.json({ data: deduped.slice(0, 24) });
 }

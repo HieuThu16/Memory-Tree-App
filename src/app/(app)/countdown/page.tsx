@@ -2,12 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser, getUserRooms } from "@/lib/supabase/queries/rooms";
-import PlansRoomList from "@/components/room/PlansRoomList";
 import NatureParticles from "@/components/ui/NatureParticles";
 
 export const dynamic = "force-dynamic";
 
-export default async function PlansPage() {
+export default async function CountdownPage() {
   const user = await getCurrentUser();
   if (!user) {
     redirect("/login");
@@ -21,7 +20,7 @@ export default async function PlansPage() {
         <NatureParticles />
         <section className="mx-auto flex w-full max-w-4xl flex-col gap-3 sm:gap-4 relative z-10">
           <div className="glass-card rounded-2xl p-4 sm:p-5">
-            <h1 className="text-base font-semibold text-foreground">Dự định</h1>
+            <h1 className="text-base font-semibold text-foreground">⏰ Đếm ngược</h1>
             <p className="mt-2 text-sm text-text-secondary">
               Bạn chưa có phòng chung nào. Vào tab Bạn bè để tạo hoặc tham gia
               phòng.
@@ -38,19 +37,19 @@ export default async function PlansPage() {
     );
   }
 
+  // Count countdowns per room
   const roomIds = rooms.map((room) => room.id);
   const supabase = await createSupabaseServerClient();
-  const { data: plansRows, error: plansError } = await supabase
-    .from("room_plans")
+  const { data: countdownRows, error: countdownError } = await supabase
+    .from("room_countdowns")
     .select("room_id")
     .in("room_id", roomIds);
 
-  const planCountByRoomId = new Map<string, number>();
-
-  if (!plansError) {
-    for (const row of plansRows ?? []) {
+  const countByRoomId = new Map<string, number>();
+  if (!countdownError) {
+    for (const row of countdownRows ?? []) {
       const roomId = row.room_id as string;
-      planCountByRoomId.set(roomId, (planCountByRoomId.get(roomId) ?? 0) + 1);
+      countByRoomId.set(roomId, (countByRoomId.get(roomId) ?? 0) + 1);
     }
   }
 
@@ -59,26 +58,27 @@ export default async function PlansPage() {
       <NatureParticles />
       <section className="mx-auto flex w-full max-w-4xl flex-col gap-3 sm:gap-4 relative z-10">
         <div className="glass-card rounded-2xl p-4 sm:p-5">
-          <h1 className="text-base font-semibold text-foreground">Dự định</h1>
+          <h1 className="text-base font-semibold text-foreground">⏰ Đếm ngược</h1>
           <p className="mt-1 text-xs text-text-secondary">
-            Chọn phòng để mở bảng dự định chi tiết.
+            Chọn phòng để xem và quản lý các ngày đếm ngược.
           </p>
-          {plansError ? (
+          {countdownError && (
             <p className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">
-              Chưa tải được dữ liệu dự định. Vui lòng kiểm tra migration
-              `room_plans`.
+              Chưa tải được dữ liệu. Vui lòng chạy migration.
             </p>
-          ) : null}
+          )}
         </div>
 
-        <PlansRoomList
+        <CountdownRoomList
           rooms={rooms.map((room) => ({
             id: room.id,
             name: room.name,
-            plansCount: planCountByRoomId.get(room.id) ?? 0,
+            countdownCount: countByRoomId.get(room.id) ?? 0,
           }))}
         />
       </section>
     </main>
   );
 }
+
+import CountdownRoomList from "@/components/room/CountdownRoomList";

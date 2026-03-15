@@ -1,0 +1,53 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+
+type RoomListItem = {
+  id: string;
+  name: string | null;
+  countdownCount: number;
+};
+
+export default function CountdownRoomList({ rooms }: { rooms: RoomListItem[] }) {
+  const router = useRouter();
+  const [openingRoomId, setOpeningRoomId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const handleOpenRoom = (roomId: string) => {
+    setOpeningRoomId(roomId);
+    startTransition(() => {
+      router.push(`/countdown/${roomId}`);
+    });
+  };
+
+  return (
+    <div className="grid gap-2">
+      {rooms.map((room) => {
+        const isOpening = isPending && openingRoomId === room.id;
+
+        return (
+          <button
+            key={room.id}
+            type="button"
+            onClick={() => handleOpenRoom(room.id)}
+            disabled={isPending}
+            className="glass-card flex items-center justify-between rounded-2xl p-4 text-left transition hover:translate-y-[-1px] disabled:opacity-70"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground">
+                ⏰ {room.name || "Phòng chung"}
+              </p>
+              <p className="mt-1 text-xs text-text-secondary">
+                {room.countdownCount} ngày đếm ngược
+              </p>
+            </div>
+            <span className="rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold text-text-secondary">
+              {isOpening ? "Đang mở..." : "Mở"}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}

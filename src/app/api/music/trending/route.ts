@@ -1,76 +1,17 @@
 import { NextResponse } from "next/server";
+import ytSearch from "yt-search";
 import type { MusicSearchResult } from "@/lib/types";
+
+export const dynamic = "force-dynamic";
 
 const SUPPORTED_COUNTRIES = ["vn", "us", "kr", "jp", "gb"] as const;
 
-function resolveCountry(country: string | null) {
-  const normalized = (country ?? "vn").toLowerCase();
-  return SUPPORTED_COUNTRIES.includes(
-    normalized as (typeof SUPPORTED_COUNTRIES)[number],
-  )
-    ? normalized
-    : "vn";
-}
-
-function normalizeItunesTrack(
-  track: Record<string, unknown>,
-): MusicSearchResult {
-  const title = String(track.trackName ?? "Unknown track");
-  const artist = typeof track.artistName === "string" ? track.artistName : null;
-  return {
-    source: "itunes",
-    source_track_id: String(
-      track.trackId ?? track.collectionId ?? track.artistId,
-    ),
-    title,
-    artist,
-    album:
-      typeof track.collectionName === "string" ? track.collectionName : null,
-    artwork_url:
-      typeof track.artworkUrl100 === "string"
-        ? track.artworkUrl100.replace("100x100", "300x300")
-        : null,
-    preview_url: typeof track.previewUrl === "string" ? track.previewUrl : null,
-    external_url:
-      typeof track.trackViewUrl === "string" ? track.trackViewUrl : null,
-    duration_ms:
-      typeof track.trackTimeMillis === "number" ? track.trackTimeMillis : null,
-  };
-}
-
-function normalizeDeezerTrack(
-  track: Record<string, unknown>,
-): MusicSearchResult {
-  const album =
-    track.album && typeof track.album === "object"
-      ? (track.album as Record<string, unknown>)
-      : null;
-  const artist =
-    track.artist && typeof track.artist === "object"
-      ? (track.artist as Record<string, unknown>)
-      : null;
-
-  const title = String(track.title ?? "Unknown track");
-  const artistName = typeof artist?.name === "string" ? artist.name : null;
-
-  return {
-    source: "deezer",
-    source_track_id: String(track.id ?? track.md5_image ?? track.link),
-    title,
-    artist: artistName,
-    album: typeof album?.title === "string" ? album.title : null,
-    artwork_url:
-      typeof album?.cover_medium === "string"
-        ? album.cover_medium
-        : typeof album?.cover === "string"
-          ? album.cover
-          : null,
-    preview_url: typeof track.preview === "string" ? track.preview : null,
-    external_url: typeof track.link === "string" ? track.link : null,
-    duration_ms:
-      typeof track.duration === "number" ? track.duration * 1000 : null,
-  };
-}
+// Cache trending results longer since they don't change often
+const trendingCache = new Map<
+  string,
+  { data: MusicSearchResult[]; ts: number }
+>();
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes for trending
 
 function normalizeJamendoTrack(
   track: Record<string, unknown>,
@@ -93,98 +34,94 @@ function normalizeJamendoTrack(
   };
 }
 
+function resolveCountry(country: string | null) {
+  const normalized = (country ?? "vn").toLowerCase();
+  return SUPPORTED_COUNTRIES.includes(
+    normalized as (typeof SUPPORTED_COUNTRIES)[number],
+  )
+    ? normalized
+    : "vn";
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const country = resolveCountry(searchParams.get("country"));
 
-  const [itunesResult, deezerResult, jamendoResult] = await Promise.allSettled([
-    fetch(
-      `https://rss.applemarketingtools.com/api/v2/${country}/music/most-played/30/songs.json`,
-      {
-        next: { revalidate: 300 },
-      },
-    ),
-    fetch("https://api.deezer.com/chart/0/tracks?limit=30", {
-      next: { revalidate: 300 },
-    }),
-    fetch(
-      "https://api.jamendo.com/v3.0/tracks/?client_id=b6747d04&format=json&limit=30&order=popularity_total&include=musicinfo&audioformat=mp32",
-      { next: { revalidate: 300 } },
-    ),
-  ]);
-
-  const items: MusicSearchResult[] = [];
-
-  if (itunesResult.status === "fulfilled" && itunesResult.value.ok) {
-    const payload = (await itunesResult.value.json()) as {
-      feed?: {
-        results?: Array<{
-          id?: string;
-          name?: string;
-          artistName?: string;
-          artworkUrl100?: string;
-          url?: string;
-        }>;
-      };
-    };
-
-    const normalized = (payload.feed?.results ?? []).map((track) =>
-      normalizeItunesTrack({
-        trackId: track.id,
-        trackName: track.name,
-        artistName: track.artistName,
-        artworkUrl100: track.artworkUrl100,
-        trackViewUrl: track.url,
-      }),
-    );
-
-    items.push(...normalized);
+  // Check cache
+  const cacheKey = `trending:${country}`;
+  const cached = trendingCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return NextResponse.json({
+      data: cached.data,
+      meta: { country, cached: true },
+    });
   }
 
-  if (deezerResult.status === "fulfilled" && deezerResult.value.ok) {
-    const payload = (await deezerResult.value.json()) as {
-      data?: Record<string, unknown>[];
-    };
-    items.push(...(payload.data ?? []).map(normalizeDeezerTrack));
-  }
-
-  if (jamendoResult.status === "fulfilled" && jamendoResult.value.ok) {
-    const payload = (await jamendoResult.value.json()) as {
-      results?: Record<string, unknown>[];
-    };
-    items.push(...(payload.results ?? []).map(normalizeJamendoTrack));
-  }
-
-  const grouped = {
-    itunes: [] as MusicSearchResult[],
-    deezer: [] as MusicSearchResult[],
-    jamendo: [] as MusicSearchResult[],
+  const queryMap: Record<string, string[]> = {
+    vn: [
+      "nhạc hot việt nam mới nhất official MV",
+      "top bài hát hay nhất 2025 việt nam",
+    ],
+    us: [
+      "top billboard hot 100 official music video",
+      "trending music usa 2025",
+    ],
+    kr: ["top kpop songs 2025 official MV", "trending kpop music video new"],
+    jp: ["top jpop songs 2025 official", "trending japanese music 2025 MV"],
+    gb: ["UK top charts 2025 official music video", "trending UK music 2025"],
   };
 
-  for (const item of items) {
-    if (!item.title || !item.source_track_id || !item.preview_url) {
-      continue;
+  try {
+    const jamendoResult = await fetch(
+      "https://api.jamendo.com/v3.0/tracks/?client_id=b6747d04&format=json&limit=24&order=popularity_total_desc&audioformat=mp32",
+      { next: { revalidate: 900 } },
+    );
+
+    let jamendoTracks: MusicSearchResult[] = [];
+    if (jamendoResult.ok) {
+      const jamendoPayload = (await jamendoResult.json()) as {
+        results?: Record<string, unknown>[];
+      };
+      jamendoTracks = (jamendoPayload.results ?? []).map(normalizeJamendoTrack);
     }
 
-    if (item.source === "itunes") {
-      grouped.itunes.push(item);
-    } else if (item.source === "deezer") {
-      grouped.deezer.push(item);
-    } else if (item.source === "jamendo") {
-      grouped.jamendo.push(item);
-    }
+    const queries = queryMap[country] || ["trending music official 2025"];
+
+    // Parallel search for multiple queries for richer results
+    const results = await Promise.allSettled(queries.map((q) => ytSearch(q)));
+
+    const allVideos = results.flatMap((r) =>
+      r.status === "fulfilled" ? r.value.videos : [],
+    );
+
+    const data: MusicSearchResult[] = allVideos.map((v) => ({
+      source: "youtube",
+      source_track_id: v.videoId,
+      title: v.title,
+      artist: v.author.name,
+      album: null,
+      artwork_url: v.thumbnail ?? null,
+      preview_url: `/api/music/play?id=${v.videoId}`,
+      external_url: v.url,
+      duration_ms: v.seconds * 1000,
+    }));
+
+    // Deduplicate by videoId
+    const deduped = Array.from(
+      new Map(
+        [...jamendoTracks, ...data].map((item) => [
+          `${item.source}:${item.source_track_id}`,
+          item,
+        ]),
+      ).values(),
+    ).slice(0, 40); // Return up to 40 results
+
+    // Cache the results
+    trendingCache.set(cacheKey, { data: deduped, ts: Date.now() });
+
+    return NextResponse.json({ data: deduped, meta: { country } });
+  } catch (error) {
+    console.error("YTSearch Trending Error:", error);
+    return NextResponse.json({ data: [], meta: { country } }, { status: 500 });
   }
-
-  const dedupeBySource = (tracks: MusicSearchResult[]) =>
-    Array.from(
-      new Map(tracks.map((item) => [item.source_track_id, item])).values(),
-    ).slice(0, 30);
-
-  const deduped = [
-    ...dedupeBySource(grouped.itunes),
-    ...dedupeBySource(grouped.deezer),
-    ...dedupeBySource(grouped.jamendo),
-  ];
-
-  return NextResponse.json({ data: deduped, meta: { country } });
 }

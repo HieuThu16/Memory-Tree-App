@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef } from "react";
 import type { MusicSearchResult } from "@/lib/types";
 import SearchResultRow from "./SearchResultRow";
 
@@ -19,6 +20,8 @@ export default function SearchPanel({
   onPlayPreview,
   playingUrl,
   onOpenAddTrack,
+  onPlayFull,
+  canPlayFull,
   trendingCountry,
   onTrendingCountryChange,
   compact,
@@ -29,7 +32,7 @@ export default function SearchPanel({
   visibleResults: MusicSearchResult[];
   isTrendingLoading: boolean;
   onSearchQueryChange: (value: string) => void;
-  onSearch: () => void;
+  onSearch: (override?: string) => void;
   onSelectTab: (tab: DiscoveryTab) => void;
   onOpenCreateModal: () => void;
   onOpenSearchResults: () => void;
@@ -37,11 +40,59 @@ export default function SearchPanel({
   onPlayPreview: (url: string) => void;
   playingUrl: string | null;
   onOpenAddTrack: (track: MusicSearchResult) => void;
+  onPlayFull: (track: MusicSearchResult) => void;
+  canPlayFull: (track: MusicSearchResult) => boolean;
   trendingCountry: TrendingCountry;
   onTrendingCountryChange: (country: TrendingCountry) => void;
   compact?: boolean;
 }) {
   const previewSearchRows = visibleResults.slice(0, 5);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("musicRecentSearches");
+      if (saved) setRecentSearches(JSON.parse(saved));
+    } catch (e) {}
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Hide suggestions when results arrive
+  useEffect(() => {
+    if (visibleResults.length > 0) {
+      setShowSuggestions(false);
+    }
+  }, [visibleResults]);
+
+  const handleExecuteSearch = (queryToSearch: string) => {
+    if (!queryToSearch.trim()) return;
+    const newRecent = [
+      queryToSearch.trim(),
+      ...recentSearches.filter((s) => s.toLowerCase() !== queryToSearch.trim().toLowerCase()),
+    ].slice(0, 10);
+    setRecentSearches(newRecent);
+    localStorage.setItem("musicRecentSearches", JSON.stringify(newRecent));
+    setShowSuggestions(false);
+    onSearch(queryToSearch);
+  };
+
+  const handleClearRecent = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRecentSearches([]);
+    localStorage.removeItem("musicRecentSearches");
+    setShowSuggestions(false);
+  };
 
   return (
     <div
@@ -75,21 +126,62 @@ export default function SearchPanel({
       </div>
 
       <div className="flex items-center gap-2">
-        <div className="relative isolate flex-1">
+        <div ref={searchContainerRef} className="relative isolate flex-1">
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => onSearchQueryChange(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && onSearch()}
+            onChange={(e) => {
+              onSearchQueryChange(e.target.value);
+              setShowSuggestions(true);
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                handleExecuteSearch(searchQuery);
+              }
+            }}
             placeholder="Ví dụ: bùi, Sơn Tùng, Lạc Trôi..."
             className="input-field w-full !rounded-2xl !py-3 text-sm disabled:opacity-60"
             disabled={activeTab === "trending"}
           />
+          
+          {/* Suggestions Dropdown */}
+          {showSuggestions && activeTab === "search" && recentSearches.length > 0 && (
+            <div className="absolute top-[110%] left-0 right-0 z-50 overflow-hidden rounded-2xl border border-border bg-white shadow-lg fade-in">
+              <div className="flex items-center justify-between border-b border-border/50 bg-gray-50/50 px-3 py-2 text-xs text-text-muted">
+                <span className="font-medium">Tìm kiếm gần đây</span>
+                <button
+                  type="button"
+                  onClick={handleClearRecent}
+                  className="font-semibold text-rose-500 hover:text-rose-600 hover:underline"
+                >
+                  Xoá lịch sử
+                </button>
+              </div>
+              <ul className="max-h-60 overflow-y-auto w-full">
+                {recentSearches.map((term, i) => (
+                  <li key={i}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSearchQueryChange(term);
+                        handleExecuteSearch(term);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-foreground hover:bg-emerald-50 hover:text-emerald-700 focus:bg-emerald-50 focus:outline-none transition-colors"
+                    >
+                      <span className="text-text-muted">🕒</span>
+                      <span className="truncate">{term}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         <button
           type="button"
-          onClick={onSearch}
+          onClick={() => handleExecuteSearch(searchQuery)}
           disabled={isSearching || activeTab === "trending"}
           className="flex h-[46px] w-[46px] items-center justify-center rounded-2xl border border-emerald-300 bg-emerald-600 text-white disabled:opacity-60"
           aria-label="Tìm"
@@ -170,6 +262,8 @@ export default function SearchPanel({
                 onPlayPreview={onPlayPreview}
                 isPlayingPreview={playingUrl === track.preview_url}
                 onOpenAddTrack={onOpenAddTrack}
+                onPlayFull={onPlayFull}
+                canPlayFull={canPlayFull(track)}
               />
             ))}
           </div>

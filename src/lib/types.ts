@@ -8,6 +8,8 @@ export type MemoryRecord = {
   title: string;
   content: string | null;
   category: string | null;
+  with_whom: string | null;
+  event_time: string | null;
   date: string | null;
   type: MemoryType;
   location: string | null;
@@ -93,6 +95,8 @@ export type CreateMemoryInput = {
   title: string;
   content?: string;
   category?: string;
+  with_whom?: string | null;
+  event_time?: string | null;
   type: MemoryType;
   date?: string;
   location?: string | null;
@@ -141,6 +145,30 @@ export type MusicSearchResult = {
   duration_ms: number | null;
 };
 
+export type CommentMediaRecord = {
+  id: string;
+  comment_id: string;
+  storage_path: string;
+  media_type: string | null;
+  created_at: string;
+};
+
+export type CommentRecord = {
+  id: string;
+  memory_id: string;
+  user_id: string;
+  room_id: string | null;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  comment_media?: CommentMediaRecord[];
+};
+
+export type CommentWithAuthor = CommentRecord & {
+  author_name: string;
+  author_avatar: string | null;
+};
+
 export type RoomPlanRecord = {
   id: string;
   room_id: string;
@@ -150,6 +178,19 @@ export type RoomPlanRecord = {
   is_completed: boolean;
   completed_by: string | null;
   completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type RoomCountdownRecord = {
+  id: string;
+  room_id: string;
+  added_by: string;
+  title: string;
+  description: string | null;
+  target_date: string;
+  emoji: string;
+  is_passed: boolean;
   created_at: string;
   updated_at: string;
 };

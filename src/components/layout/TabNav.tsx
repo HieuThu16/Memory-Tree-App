@@ -28,7 +28,6 @@ const tabs = [
   {
     href: "/friends",
     label: "Bạn bè",
-    emoji: "🌿",
     icon: (
       <svg
         width="16"
@@ -50,7 +49,6 @@ const tabs = [
   {
     href: "/plans",
     label: "Dự định",
-    emoji: "✅",
     icon: (
       <svg
         width="16"
@@ -62,15 +60,38 @@ const tabs = [
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <path d="M9 11l3 3L22 4" />
-        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+        <path d="M7 20h10" />
+        <path d="M12 20v-8" />
+        <path d="M12 12c-3.5 0-6-2.5-6-6 0 6 6 6 6 6z" />
+        <path d="M12 12c3.5 0 6-2.5 6-6 0 6-6 6-6 6z" />
+      </svg>
+    ),
+  },
+  {
+    href: "/countdown",
+    label: "Đếm ngược",
+    icon: (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="12" cy="13" r="8" />
+        <path d="M12 9v4l2 2" />
+        <path d="M5 3L2 6" />
+        <path d="M22 6l-3-3" />
+        <path d="M12 2v2" />
       </svg>
     ),
   },
   {
     href: "/music",
     label: "Nhạc",
-    emoji: "🎵",
     icon: (
       <svg
         width="16"
@@ -94,8 +115,11 @@ export default function TabNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-2 z-40 mx-auto w-[min(380px,calc(100vw-1rem))]">
-      <div className="mx-auto grid grid-cols-4 gap-0.5 rounded-2xl border border-white/60 bg-white/92 p-1 shadow-[0_14px_32px_-20px_rgba(71,54,126,0.36)] backdrop-blur-md">
+    <nav 
+      className="fixed inset-x-0 z-50 mx-auto w-[min(480px,calc(100vw-0.9rem))] pb-2"
+      style={{ bottom: "max(12px, env(safe-area-inset-bottom))" }}
+    >
+      <div className="mx-auto flex justify-between gap-1 rounded-[2rem] border border-white/60 bg-white/40 p-2 shadow-[0_12px_40px_-16px_rgba(124,92,230,0.4)] backdrop-blur-2xl">
         {tabs.map((tab) => {
           const isActive =
             tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
@@ -106,14 +130,16 @@ export default function TabNav() {
               href={tab.href}
               prefetch={true}
               aria-current={isActive ? "page" : undefined}
-              className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] transition-colors ${
+              className={`flex flex-1 flex-col items-center justify-center gap-1 rounded-[1.5rem] py-2 transition-all duration-300 ${
                 isActive
-                  ? "bg-accent text-white shadow-[0_10px_20px_-14px_rgba(108,76,215,0.9)]"
-                  : "text-text-muted hover:bg-white"
+                  ? "bg-gradient-to-tr from-accent to-accent-soft text-white shadow-[0_4px_12px_rgba(124,92,230,0.4)] scale-105"
+                  : "text-text-secondary hover:bg-white/60 hover:scale-105"
               }`}
             >
-              <span>{tab.icon}</span>
-              <span>{tab.label}</span>
+              <span className="scale-110 mb-0.5">{tab.icon}</span>
+              <span className="text-[9px] font-bold tracking-wide">
+                {tab.label}
+              </span>
             </Link>
           );
         })}

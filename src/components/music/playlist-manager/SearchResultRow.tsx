@@ -9,12 +9,16 @@ export default function SearchResultRow({
   onPlayPreview,
   isPlayingPreview,
   onOpenAddTrack,
+  onPlayFull,
+  canPlayFull,
 }: {
   track: MusicSearchResult;
   searchQuery: string;
   onPlayPreview: (url: string) => void;
   isPlayingPreview: boolean;
   onOpenAddTrack: (track: MusicSearchResult) => void;
+  onPlayFull: (track: MusicSearchResult) => void;
+  canPlayFull: boolean;
 }) {
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-border bg-white/80 p-2.5">
@@ -51,6 +55,17 @@ export default function SearchResultRow({
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
+        {canPlayFull ? (
+          <button
+            type="button"
+            onClick={() => onPlayFull(track)}
+            className="rounded-full border border-accent bg-accent/10 px-2 py-1 text-[10px] font-semibold text-accent"
+            aria-label="Nghe full"
+            title="Nghe full"
+          >
+            Full
+          </button>
+        ) : null}
         {track.preview_url ? (
           <button
             type="button"

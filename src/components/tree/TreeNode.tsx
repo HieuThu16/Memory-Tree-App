@@ -2,7 +2,6 @@
 
 import { memo, type KeyboardEvent } from "react";
 import type { MemoryParticipant } from "@/lib/types";
-import { getParticipantAppearance } from "@/lib/memberAppearance";
 import type { PositionedNode } from "./types";
 
 /* ─── 5 distinct color variants for the new organic shape ─── */
@@ -68,7 +67,7 @@ const DECORATIVE_ICONS = [
 ];
 
 /** Pick random decorations deterministically using the node id hash */
-const getDecorations = (nodeId: string, count: number = 2) => {
+const getDecorations = (nodeId: string) => {
   let hash = 0;
   for (let i = 0; i < nodeId.length; i++) {
     hash = ((hash << 5) - hash + nodeId.charCodeAt(i)) | 0;
@@ -101,13 +100,13 @@ const getDecorations = (nodeId: string, count: number = 2) => {
     const offset = 8 + rng() * 20;
     const distance = ellipseRadius + offset;
 
-    // Convert to cartesian coordinates
-    const sx = Math.cos(angle) * distance;
-    const sy = Math.sin(angle) * distance;
+    // Convert to cartesian coordinates and round to 2 decimals to prevent SSR Hydration mismatch
+    const sx = Math.round(Math.cos(angle) * distance * 100) / 100;
+    const sy = Math.round(Math.sin(angle) * distance * 100) / 100;
 
     const size = 10 + Math.floor(rng() * 8); // 10-18 size
-    const delay = rng() * 2.5; // for float offset
-    const rotate = rng() * 60 - 30; // -30 to 30 deg
+    const delay = Math.round(rng() * 2.5 * 100) / 100; // for float offset
+    const rotate = Math.round((rng() * 60 - 30) * 100) / 100; // -30 to 30 deg
 
     decors.push({ icon, x: sx, y: sy, size, delay, rotate });
   }
@@ -151,22 +150,14 @@ const buildTitleLines = (title: string, maxChars = 18) => {
   return lines;
 };
 
-function TreeNodeView({
-  node,
-  index,
-  isSelected,
-  onSelect,
-  participant,
-}: {
+function TreeNodeView(props: {
   node: PositionedNode;
   index: number;
   isSelected?: boolean;
   onSelect?: (nodeId: string) => void;
   participant?: MemoryParticipant;
 }) {
-  const ownerAppearance = participant
-    ? getParticipantAppearance(participant)
-    : null;
+  const { node, index, isSelected, onSelect } = props;
   const titleLines = buildTitleLines(node.title);
 
   const contentSnippet = node.memory?.content
@@ -181,6 +172,7 @@ function TreeNodeView({
       ? "🎬"
       : "📷"
     : null;
+  const hasLocation = Boolean(node.memory?.location?.trim());
 
   // Use the new standard node size
   const W_NODE = 115,
@@ -252,6 +244,42 @@ function TreeNodeView({
           style={{
             fill: "white",
             fontSize: 15,
+            fontWeight: 700,
+            fontFamily: "Georgia, serif",
+          }}
+        >
+          {node.title}
+        </text>
+      </g>
+    );
+  }
+
+  if (node.kind === "month") {
+    return (
+      <g
+        style={{
+          animation: `fadeUp 0.38s ease forwards ${index * 0.09}s`,
+          opacity: 0,
+          animationFillMode: "forwards",
+        }}
+      >
+        <rect
+          x={node.x - 48}
+          y={node.y - 16}
+          width={96}
+          height={32}
+          rx={16}
+          fill="#9a85f4"
+          stroke="rgba(255,255,255,0.55)"
+          strokeWidth={1.3}
+        />
+        <text
+          x={node.x}
+          y={node.y + 5}
+          textAnchor="middle"
+          style={{
+            fill: "white",
+            fontSize: 13,
             fontWeight: 700,
             fontFamily: "Georgia, serif",
           }}
@@ -350,6 +378,29 @@ function TreeNodeView({
               style={{ fontSize: 11, pointerEvents: "none" }}
             >
               {mediaBadge}
+            </text>
+          </g>
+        ) : null}
+
+        {hasLocation ? (
+          <g>
+            <rect
+              x={rx - 30}
+              y={-ry + 8}
+              width="22"
+              height="20"
+              rx="8"
+              fill="rgba(255,255,255,0.82)"
+              stroke={v.stroke}
+              strokeWidth="1"
+            />
+            <text
+              x={rx - 19}
+              y={-ry + 22}
+              textAnchor="middle"
+              style={{ fontSize: 11, pointerEvents: "none" }}
+            >
+              📍
             </text>
           </g>
         ) : null}

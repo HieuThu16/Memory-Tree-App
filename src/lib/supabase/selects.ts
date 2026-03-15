@@ -1,4 +1,7 @@
 export const MEMORY_SELECT =
+  "id, user_id, room_id, parent_id, title, content, category, with_whom, event_time, location, date, type, position_x, position_y, created_at, media(id, memory_id, storage_path, media_type, thumbnail, duration, created_at)";
+
+export const MEMORY_SELECT_LEGACY =
   "id, user_id, room_id, parent_id, title, content, category, location, date, type, position_x, position_y, created_at, media(id, memory_id, storage_path, media_type, thumbnail, duration, created_at)";
 
 export const PLAYLIST_SELECT =

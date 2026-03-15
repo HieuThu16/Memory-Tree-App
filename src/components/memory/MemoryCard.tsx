@@ -34,6 +34,11 @@ const formatCreatedAt = (memory: MemoryRecord) => {
   }).format(date);
 };
 
+const formatEventTime = (value: string | null) => {
+  if (!value) return "";
+  return value.slice(0, 5);
+};
+
 export default function MemoryCard({
   memory,
   index = 0,
@@ -119,6 +124,11 @@ export default function MemoryCard({
                   ✿ {memory.category}
                 </span>
               ) : null}
+              {memory.with_whom ? (
+                <span className="rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] font-medium text-text-secondary">
+                  👥 {memory.with_whom}
+                </span>
+              ) : null}
               {memory.location ? (
                 <span className="rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] font-medium text-text-secondary">
                   📍 {memory.location}
@@ -131,6 +141,12 @@ export default function MemoryCard({
 
       <div className="mt-2 flex items-center gap-2 text-[10px] text-text-muted">
         <span>🗓 {formatDate(memory)}</span>
+        {memory.event_time ? (
+          <>
+            <span className="opacity-50">•</span>
+            <span>🕒 {formatEventTime(memory.event_time)}</span>
+          </>
+        ) : null}
         <span className="opacity-50">•</span>
         <span className="opacity-70">🕐 {formatCreatedAt(memory)}</span>
       </div>

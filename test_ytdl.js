@@ -1,0 +1,1 @@
+const ytdl = require("@distube/ytdl-core"); ytdl("https://www.youtube.com/watch?v=abPmZCZZrFA", { filter: "audioonly" }).on("info", info => console.log("Success")).on("error", err => console.log("Error:", err.message));

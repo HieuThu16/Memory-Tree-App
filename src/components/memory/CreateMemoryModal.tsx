@@ -10,24 +10,28 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { deleteMedia, createMemory, updateMemory } from "@/lib/actions";
 import MediaUploader, { type UploadableFile } from "./MediaUploader";
 
-const personalCategorySuggestions = [
+const categorySuggestions = [
+  "Cột mốc",
+  "Cột mốc lần 1",
+  "Cột mốc lần 2",
   "Gia đình",
   "Tình yêu",
   "Bạn bè",
   "Du lịch",
   "Sinh nhật",
-  "Cột mốc",
   "Công việc",
   "Thường ngày",
 ];
 
 const categoryIcons: Record<string, string> = {
+  "Cột mốc": "🏆",
+  "Cột mốc lần 1": "🥇",
+  "Cột mốc lần 2": "🥈",
   "Gia đình": "🏠",
   "Tình yêu": "💕",
   "Bạn bè": "👋",
   "Du lịch": "✈️",
   "Sinh nhật": "🎂",
-  "Cột mốc": "🏆",
   "Công việc": "💼",
   "Thường ngày": "☀️",
 };
@@ -45,9 +49,46 @@ export default function CreateMemoryModal() {
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("");
   const [location, setLocation] = useState("");
+  const [withWhom, setWithWhom] = useState("");
+  const [eventTime, setEventTime] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [files, setFiles] = useState<UploadableFile[]>([]);
   const [isPending, startTransition] = useTransition();
+
+  const handleGetCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      addToast("Trình duyệt không hỗ trợ lấy vị trí.", "error");
+      return;
+    }
+    addToast("Đang tìm vị trí hiện tại...", "info");
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
+          );
+          const data = await res.json();
+          if (data && data.display_name) {
+            const city =
+              data.address.city ||
+              data.address.town ||
+              data.address.state ||
+              data.display_name.split(",")[0];
+            setLocation(city);
+            addToast("Đã lấy vị trí thành công", "success");
+          } else {
+            setLocation(`${latitude}, ${longitude}`);
+          }
+        } catch (e) {
+          addToast("Không thể phân tích vị trí", "error");
+        }
+      },
+      () => {
+        addToast("Từ chối truy cập vị trí", "error");
+      },
+    );
+  };
 
   const getMediaUrl = (path: string) => {
     return createSupabaseBrowserClient()
@@ -100,6 +141,8 @@ export default function CreateMemoryModal() {
       setContent(editingMemory.content || "");
       setCategory(editingMemory.category || "");
       setLocation(editingMemory.location || "");
+      setWithWhom(editingMemory.with_whom || "");
+      setEventTime(editingMemory.event_time || "");
 
       let initialDate = new Date().toISOString().slice(0, 10);
       if (editingMemory.date) {
@@ -115,6 +158,8 @@ export default function CreateMemoryModal() {
       setContent("");
       setCategory("");
       setLocation("");
+      setWithWhom("");
+      setEventTime("");
       setDate(new Date().toISOString().slice(0, 10));
       setFiles([]);
     }
@@ -125,6 +170,8 @@ export default function CreateMemoryModal() {
     setContent("");
     setCategory("");
     setLocation("");
+    setWithWhom("");
+    setEventTime("");
     setDate(new Date().toISOString().slice(0, 10));
     setFiles([]);
   };
@@ -201,7 +248,9 @@ export default function CreateMemoryModal() {
         const result = await updateMemory(editingMemory.id, {
           title: title.trim(),
           content: content.trim() || undefined,
-          category: isPersonalMemory ? category.trim() || undefined : undefined,
+          category: category.trim() || undefined,
+          with_whom: withWhom.trim() || null,
+          event_time: eventTime.trim() || null,
           location: location.trim() || undefined,
           date: new Date(date).toISOString(),
         });
@@ -243,7 +292,9 @@ export default function CreateMemoryModal() {
         const result = await createMemory({
           title: title.trim(),
           content: content.trim() || undefined,
-          category: isPersonalMemory ? category.trim() || undefined : undefined,
+          category: category.trim() || undefined,
+          with_whom: withWhom.trim() || null,
+          event_time: eventTime.trim() || null,
           location: location.trim() || undefined,
           type: inferredType,
           date: new Date(date).toISOString(),
@@ -294,13 +345,23 @@ export default function CreateMemoryModal() {
           onClick={closeCreate}
         >
           <motion.div
-            className="glass-card flex max-h-[85vh] w-full max-w-md flex-col rounded-2xl shadow-[var(--shadow-card)] sm:max-w-lg sm:rounded-3xl"
-            initial={{ opacity: 0, y: 30, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 30, scale: 0.95 }}
-            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+            className="glass-card relative mt-auto flex max-h-[92dvh] w-full max-w-md flex-col rounded-2xl shadow-[var(--shadow-card)] sm:mt-0 sm:max-w-lg sm:rounded-3xl"
+            initial={{ y: "100%", opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: "100%", opacity: 0, scale: 0.95 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 200 }}
+            dragElastic={0.2}
+            onDragEnd={(e, info) => {
+              if (info.offset.y > 100) {
+                closeCreate();
+              }
+            }}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Drag Handle for Mobile */}
+            <div className="absolute left-1/2 top-2 h-1.5 w-12 -translate-x-1/2 rounded-full bg-black/15 sm:hidden" />
             {/* Fixed Header */}
             <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5">
               <div className="flex items-center gap-2">
@@ -319,7 +380,10 @@ export default function CreateMemoryModal() {
             </div>
 
             {/* Scrollable Body */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">
+            <div
+              className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4 overscroll-contain"
+              onPointerDownCapture={(e) => e.stopPropagation()}
+            >
               {/* Title */}
               <div>
                 <label
@@ -341,12 +405,32 @@ export default function CreateMemoryModal() {
 
               {/* Location */}
               <div className="mt-3">
-                <label
-                  htmlFor="memory-location"
-                  className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
-                >
-                  📍 Địa điểm
-                </label>
+                <div className="flex items-center justify-between">
+                  <label
+                    htmlFor="memory-location"
+                    className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
+                  >
+                    📍 Địa điểm
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleGetCurrentLocation}
+                    className="text-[10px] text-accent font-medium hover:underline flex items-center gap-1"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                    Lấy vị trí hiện tại
+                  </button>
+                </div>
                 <input
                   id="memory-location"
                   type="text"
@@ -375,61 +459,96 @@ export default function CreateMemoryModal() {
                 />
               </div>
 
-              {isPersonalMemory ? (
-                <div className="mt-3">
-                  <label
-                    htmlFor="memory-category"
-                    className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
-                  >
-                    ✿ Thể loại
-                  </label>
-                  <input
-                    id="memory-category"
-                    type="text"
-                    placeholder="VD: Chuyến đi, Gia đình..."
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="input-field mt-1.5 !rounded-xl !py-2.5 !text-sm"
-                  />
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {personalCategorySuggestions.map((item) => {
-                      const active =
-                        category.trim().toLowerCase() === item.toLowerCase();
-
-                      return (
-                        <button
-                          key={item}
-                          type="button"
-                          onClick={() => setCategory(item)}
-                          className={`rounded-full border px-2.5 py-1 text-[10px] font-medium transition ${
-                            active
-                              ? "border-accent bg-accent text-white"
-                              : "border-border bg-white/75 text-text-secondary hover:border-accent hover:text-accent"
-                          }`}
-                        >
-                          {categoryIcons[item] || "✿"} {item}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-
-              {/* Date */}
+              {/* Category */}
               <div className="mt-3">
                 <label
-                  htmlFor="memory-date"
+                  htmlFor="memory-category"
                   className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
                 >
-                  🗓 Ngày
+                  ✿ Thể loại / Cột mốc
                 </label>
                 <input
-                  id="memory-date"
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  id="memory-category"
+                  type="text"
+                  placeholder="VD: Chuyến đi, Cột mốc lần 1..."
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
                   className="input-field mt-1.5 !rounded-xl !py-2.5 !text-sm"
                 />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {categorySuggestions.map((item) => {
+                    const active =
+                      category.trim().toLowerCase() === item.toLowerCase();
+
+                    return (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => setCategory(item)}
+                        className={`rounded-full border px-2.5 py-1 text-[10px] font-medium transition ${
+                          active
+                            ? "border-accent bg-accent text-white"
+                            : "border-border bg-white/75 text-text-secondary hover:border-accent hover:text-accent"
+                        }`}
+                      >
+                        {categoryIcons[item] || "✿"} {item}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* With Whom */}
+              <div className="mt-3">
+                <label
+                  htmlFor="memory-with"
+                  className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
+                >
+                  👥 Cùng với ai?
+                </label>
+                <input
+                  id="memory-with"
+                  type="text"
+                  placeholder="VD: Nguyễn Văn A, Tran B..."
+                  value={withWhom}
+                  onChange={(e) => setWithWhom(e.target.value)}
+                  className="input-field mt-1.5 !rounded-xl !py-2.5 !text-sm"
+                />
+              </div>
+
+              {/* Date + Time */}
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="memory-date"
+                    className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
+                  >
+                    🗓 Ngày
+                  </label>
+                  <input
+                    id="memory-date"
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="input-field mt-1.5 !rounded-xl !py-2.5 !text-sm"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="memory-time"
+                    className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
+                  >
+                    🕒 Giờ
+                  </label>
+                  <input
+                    id="memory-time"
+                    type="time"
+                    step={60}
+                    value={eventTime}
+                    onChange={(e) => setEventTime(e.target.value)}
+                    className="input-field mt-1.5 !rounded-xl !py-2.5 !text-sm"
+                  />
+                </div>
               </div>
 
               {/* Existing Media Display */}
