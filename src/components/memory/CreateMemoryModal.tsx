@@ -70,13 +70,8 @@ export default function CreateMemoryModal() {
           );
           const data = await res.json();
           if (data && data.display_name) {
-            const city =
-              data.address.city ||
-              data.address.town ||
-              data.address.state ||
-              data.display_name.split(",")[0];
-            setLocation(city);
-            addToast("Đã lấy vị trí thành công", "success");
+            setLocation(data.display_name);
+            addToast("Đã lấy chi tiết vị trí thành công", "success");
           } else {
             setLocation(`${latitude}, ${longitude}`);
           }

@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import dynamic from "next/dynamic";
 import MemoryTree from "@/components/tree/MemoryTree";
 import MemoryGallery from "@/components/memory/MemoryGallery";
+import MemoryList from "@/components/memory/MemoryList";
 import type { MemoryParticipant, MemoryRecord } from "@/lib/types";
 import { useMemoryStore } from "@/lib/stores/memoryStore";
 import { useTreeStore } from "@/lib/stores/treeStore";
 import ConnectedUsersBanner from "@/components/realtime/ConnectedUsersBanner";
-import MusicSyncProvider from "@/components/music/MusicSyncProvider";
 
 const MemoryMap = dynamic(() => import("@/components/memory/MemoryMap"), {
   ssr: false,
@@ -53,24 +59,69 @@ export default function RoomClientSection({
       ) ?? null,
     [currentUserId, participants],
   );
-  const [memoryViewMode, setMemoryViewMode] = useState<"tree" | "gallery" | "map">(
-    "tree",
-  );
+  const [isSwitchingView, startSwitchViewTransition] = useTransition();
+  const [memoryViewMode, setMemoryViewMode] = useState<
+    "tree" | "gallery" | "map" | "list"
+  >("tree");
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  const handleSwitchViewMode = (
+    nextMode: "tree" | "gallery" | "map" | "list",
+  ) => {
+    if (nextMode === memoryViewMode) return;
+    startSwitchViewTransition(() => {
+      setMemoryViewMode(nextMode);
+    });
+  };
 
   useEffect(() => {
     hydrateScope(`room:${roomId}`, memories);
   }, [hydrateScope, memories, roomId]);
 
   const filteredMemories = useMemo(() => {
-    if (!searchQuery.trim()) return scopedMemories;
-    const lowerQ = searchQuery.toLowerCase();
-    return scopedMemories.filter(
-      (m) =>
-        m.title.toLowerCase().includes(lowerQ) ||
-        (m.category && m.category.toLowerCase().includes(lowerQ)),
+    let result = scopedMemories;
+    if (deferredSearchQuery.trim()) {
+      const lowerQ = deferredSearchQuery.toLowerCase();
+      result = result.filter(
+        (m) =>
+          m.title.toLowerCase().includes(lowerQ) ||
+          (m.category && m.category.toLowerCase().includes(lowerQ)),
+      );
+    }
+    // Sort from newest to oldest
+    const sorted = [...result].sort((a, b) => {
+      const d1 = new Date(a.date || a.created_at).getTime();
+      const d2 = new Date(b.date || b.created_at).getTime();
+      return d2 - d1;
+    });
+    return sorted;
+  }, [deferredSearchQuery, scopedMemories]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") return;
+
+    const startedAt = performance.now();
+    let result = scopedMemories;
+    if (deferredSearchQuery.trim()) {
+      const lowerQ = deferredSearchQuery.toLowerCase();
+      result = result.filter(
+        (m) =>
+          m.title.toLowerCase().includes(lowerQ) ||
+          (m.category && m.category.toLowerCase().includes(lowerQ)),
+      );
+    }
+
+    const sorted = [...result].sort((a, b) => {
+      const d1 = new Date(a.date || a.created_at).getTime();
+      const d2 = new Date(b.date || b.created_at).getTime();
+      return d2 - d1;
+    });
+
+    console.log(
+      `[Perf][RoomClientSection] filter+sort=${(performance.now() - startedAt).toFixed(2)}ms (query='${deferredSearchQuery}', total=${scopedMemories.length}, visible=${sorted.length})`,
     );
-  }, [scopedMemories, searchQuery]);
+  }, [deferredSearchQuery, scopedMemories]);
 
   return (
     <section className="glass-card overflow-hidden rounded-2xl p-2.5 sm:rounded-[30px] sm:p-4">
@@ -139,7 +190,7 @@ export default function RoomClientSection({
           </div>
           <div className="flex items-center rounded-xl border border-border bg-white/60 p-1 backdrop-blur-sm">
             <button
-              onClick={() => setMemoryViewMode("tree")}
+              onClick={() => handleSwitchViewMode("tree")}
               className={`rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
                 memoryViewMode === "tree"
                   ? "bg-accent text-white shadow-sm"
@@ -150,7 +201,18 @@ export default function RoomClientSection({
               🌳
             </button>
             <button
-              onClick={() => setMemoryViewMode("gallery")}
+              onClick={() => handleSwitchViewMode("list")}
+              className={`rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
+                memoryViewMode === "list"
+                  ? "bg-accent text-white shadow-sm"
+                  : "text-text-secondary hover:bg-white"
+              }`}
+              title="Danh sách"
+            >
+              📋
+            </button>
+            <button
+              onClick={() => handleSwitchViewMode("gallery")}
               className={`rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
                 memoryViewMode === "gallery"
                   ? "bg-accent text-white shadow-sm"
@@ -161,7 +223,7 @@ export default function RoomClientSection({
               🖼️
             </button>
             <button
-              onClick={() => setMemoryViewMode("map")}
+              onClick={() => handleSwitchViewMode("map")}
               className={`rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
                 memoryViewMode === "map"
                   ? "bg-accent text-white shadow-sm"
@@ -176,16 +238,32 @@ export default function RoomClientSection({
       </div>
 
       {/* Content View */}
-      <div className="mt-3 rounded-2xl bg-white/58 p-1.5 sm:p-2 min-h-[50vh]">
-        <div className={memoryViewMode === "tree" ? "" : "hidden"}>
-          <MemoryTree
-            memories={filteredMemories}
-            participants={participants}
-            participantsByUserId={participantsByUserId}
-            isTwoPerson={isTwoPerson}
-            currentUserId={currentUserId}
-          />
-        </div>
+      <div className="mt-3 rounded-2xl bg-white/58 p-1.5 sm:p-3 min-h-[50vh] relative">
+        {isSwitchingView ? (
+          <div className="absolute right-3 top-3 rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] text-text-muted">
+            Đang chuyển tab...
+          </div>
+        ) : null}
+        <MemoryTree
+          memories={filteredMemories}
+          participants={participants}
+          participantsByUserId={participantsByUserId}
+          isTwoPerson={isTwoPerson}
+          currentUserId={currentUserId}
+          hideTree={memoryViewMode !== "tree"}
+        />
+        {memoryViewMode === "list" && (
+          <div className="mt-2">
+            <MemoryList
+              memories={filteredMemories}
+              participantsByUserId={participantsByUserId}
+              onSelect={(m) => {
+                useTreeStore.getState().setSelectedId(m.id);
+                useTreeStore.getState().setIsDetailOpen(true);
+              }}
+            />
+          </div>
+        )}
         {memoryViewMode === "gallery" && (
           <MemoryGallery
             memories={filteredMemories}

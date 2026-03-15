@@ -60,7 +60,10 @@ export default function SearchPanel({
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(event.target as Node)
+      ) {
         setShowSuggestions(false);
       }
     }
@@ -79,7 +82,9 @@ export default function SearchPanel({
     if (!queryToSearch.trim()) return;
     const newRecent = [
       queryToSearch.trim(),
-      ...recentSearches.filter((s) => s.toLowerCase() !== queryToSearch.trim().toLowerCase()),
+      ...recentSearches.filter(
+        (s) => s.toLowerCase() !== queryToSearch.trim().toLowerCase(),
+      ),
     ].slice(0, 10);
     setRecentSearches(newRecent);
     localStorage.setItem("musicRecentSearches", JSON.stringify(newRecent));
@@ -144,39 +149,41 @@ export default function SearchPanel({
             className="input-field w-full !rounded-2xl !py-3 text-sm disabled:opacity-60"
             disabled={activeTab === "trending"}
           />
-          
+
           {/* Suggestions Dropdown */}
-          {showSuggestions && activeTab === "search" && recentSearches.length > 0 && (
-            <div className="absolute top-[110%] left-0 right-0 z-50 overflow-hidden rounded-2xl border border-border bg-white shadow-lg fade-in">
-              <div className="flex items-center justify-between border-b border-border/50 bg-gray-50/50 px-3 py-2 text-xs text-text-muted">
-                <span className="font-medium">Tìm kiếm gần đây</span>
-                <button
-                  type="button"
-                  onClick={handleClearRecent}
-                  className="font-semibold text-rose-500 hover:text-rose-600 hover:underline"
-                >
-                  Xoá lịch sử
-                </button>
+          {showSuggestions &&
+            activeTab === "search" &&
+            recentSearches.length > 0 && (
+              <div className="absolute top-[110%] left-0 right-0 z-50 overflow-hidden rounded-2xl border border-border bg-white shadow-lg fade-in">
+                <div className="flex items-center justify-between border-b border-border/50 bg-gray-50/50 px-3 py-2 text-xs text-text-muted">
+                  <span className="font-medium">Tìm kiếm gần đây</span>
+                  <button
+                    type="button"
+                    onClick={handleClearRecent}
+                    className="font-semibold text-rose-500 hover:text-rose-600 hover:underline"
+                  >
+                    Xoá lịch sử
+                  </button>
+                </div>
+                <ul className="max-h-60 overflow-y-auto w-full">
+                  {recentSearches.map((term, i) => (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSearchQueryChange(term);
+                          handleExecuteSearch(term);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-foreground hover:bg-emerald-50 hover:text-emerald-700 focus:bg-emerald-50 focus:outline-none transition-colors"
+                      >
+                        <span className="text-text-muted">🕒</span>
+                        <span className="truncate">{term}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="max-h-60 overflow-y-auto w-full">
-                {recentSearches.map((term, i) => (
-                  <li key={i}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onSearchQueryChange(term);
-                        handleExecuteSearch(term);
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-foreground hover:bg-emerald-50 hover:text-emerald-700 focus:bg-emerald-50 focus:outline-none transition-colors"
-                    >
-                      <span className="text-text-muted">🕒</span>
-                      <span className="truncate">{term}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            )}
         </div>
 
         <button

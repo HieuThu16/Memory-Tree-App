@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import type { CommentWithAuthor } from "@/lib/types";
 import {
   fetchComments,
@@ -33,23 +40,19 @@ function CommentMediaPreview({
   file: File;
   onRemove: () => void;
 }) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const previewUrl = useMemo(() => URL.createObjectURL(file), [file]);
   const isVideo = file.type.startsWith("video/");
 
   useEffect(() => {
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+    return () => {
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   return (
     <div className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-border">
       {isVideo ? (
-        <video
-          src={previewUrl ?? undefined}
-          className="h-full w-full object-cover"
-          muted
-        />
+        <video src={previewUrl} className="h-full w-full object-cover" muted />
       ) : (
         previewUrl && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -163,6 +166,8 @@ function SingleComment({
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
               className="input-field !rounded-xl !py-2 text-xs"
+              aria-label="Nội dung chỉnh sửa bình luận"
+              placeholder="Chỉnh sửa bình luận"
               rows={2}
             />
             <div className="flex gap-1.5">
@@ -232,10 +237,16 @@ export default function MemoryComments({
   memoryId,
   roomId,
   currentUserId,
+  showComposer = true,
+  showList = true,
+  onCommentSubmitted,
 }: {
   memoryId: string;
   roomId: string | null;
   currentUserId: string;
+  showComposer?: boolean;
+  showList?: boolean;
+  onCommentSubmitted?: () => void;
 }) {
   const addToast = useUiStore((s) => s.addToast);
   const [comments, setComments] = useState<CommentWithAuthor[]>([]);
@@ -255,7 +266,13 @@ export default function MemoryComments({
   }, [memoryId]);
 
   useEffect(() => {
-    void loadComments();
+    const timer = window.setTimeout(() => {
+      void loadComments();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [loadComments]);
 
   // Realtime subscription for comments
@@ -356,6 +373,7 @@ export default function MemoryComments({
       setMediaFiles([]);
       void loadComments();
       addToast("Đã gửi bình luận 💬", "success");
+      onCommentSubmitted?.();
     });
   };
 
@@ -398,127 +416,133 @@ export default function MemoryComments({
       </div>
 
       {/* Comments list */}
-      <div
-        ref={scrollRef}
-        className="max-h-64 overflow-y-auto overscroll-contain py-2"
-        onPointerDownCapture={(e) => e.stopPropagation()}
-      >
-        {isLoading ? (
-          <div className="flex items-center justify-center py-4">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-          </div>
-        ) : comments.length === 0 ? (
-          <p className="py-4 text-center text-xs text-text-muted">
-            Chưa có bình luận nào. Hãy là người đầu tiên! 🌸
-          </p>
-        ) : (
-          <div className="space-y-1">
-            {comments.map((comment) => (
-              <SingleComment
-                key={comment.id}
-                comment={comment}
-                currentUserId={currentUserId}
-                onUpdate={handleUpdate}
-                onDelete={handleDelete}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      {showList ? (
+        <div
+          ref={scrollRef}
+          className="max-h-64 overflow-y-auto overscroll-contain py-2"
+          onPointerDownCapture={(e) => e.stopPropagation()}
+        >
+          {isLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+            </div>
+          ) : comments.length === 0 ? (
+            <p className="py-4 text-center text-xs text-text-muted">
+              Chưa có bình luận nào. Hãy là người đầu tiên! 🌸
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {comments.map((comment) => (
+                <SingleComment
+                  key={comment.id}
+                  comment={comment}
+                  currentUserId={currentUserId}
+                  onUpdate={handleUpdate}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {/* New comment input */}
-      <div
-        className="border-t border-border/40 pt-2"
-        onPointerDownCapture={(e) => e.stopPropagation()}
-      >
-        {/* Media previews */}
-        {mediaFiles.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {mediaFiles.map((file, index) => (
-              <CommentMediaPreview
-                key={`${file.name}-${index}`}
-                file={file}
-                onRemove={() => handleRemoveMedia(index)}
-              />
-            ))}
-          </div>
-        )}
+      {showComposer ? (
+        <div
+          className={`${showList ? "border-t border-border/40 pt-2" : "pt-2"}`}
+          onPointerDownCapture={(e) => e.stopPropagation()}
+        >
+          {/* Media previews */}
+          {mediaFiles.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {mediaFiles.map((file, index) => (
+                <CommentMediaPreview
+                  key={`${file.name}-${index}`}
+                  file={file}
+                  onRemove={() => handleRemoveMedia(index)}
+                />
+              ))}
+            </div>
+          )}
 
-        <div className="flex items-end gap-2">
-          {/* Media button */}
-          <button
-            type="button"
-            onClick={handleAddMedia}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-white/80 text-text-secondary transition hover:border-accent hover:text-accent"
-            title="Thêm ảnh/video"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <div className="flex items-end gap-2">
+            {/* Media button */}
+            <button
+              type="button"
+              onClick={handleAddMedia}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-white/80 text-text-secondary transition hover:border-accent hover:text-accent"
+              title="Thêm ảnh/video"
             >
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21 15 16 10 5 21" />
-            </svg>
-          </button>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,video/*"
-            multiple
-            className="hidden"
-            onChange={handleFileSelect}
-          />
-
-          {/* Text input */}
-          <div className="flex flex-1 items-end rounded-2xl border border-border bg-white/90 px-3 py-2 focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-glow)]">
-            <textarea
-              value={newContent}
-              onChange={(e) => setNewContent(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit();
-                }
-              }}
-              placeholder="Viết bình luận..."
-              rows={1}
-              className="max-h-20 flex-1 resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-text-muted"
-            />
-          </div>
-
-          {/* Send */}
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={
-              isPending || (!newContent.trim() && mediaFiles.length === 0)
-            }
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white shadow-md transition active:scale-95 disabled:opacity-50"
-            title="Gửi"
-          >
-            {isPending ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-            ) : (
               <svg
                 width="16"
                 height="16"
                 viewBox="0 0 24 24"
-                fill="currentColor"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
               </svg>
-            )}
-          </button>
+            </button>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              className="hidden"
+              aria-label="Chọn ảnh hoặc video bình luận"
+              title="Chọn ảnh hoặc video bình luận"
+              onChange={handleFileSelect}
+            />
+
+            {/* Text input */}
+            <div className="flex flex-1 items-end rounded-2xl border border-border bg-white/90 px-3 py-2 focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-glow)]">
+              <textarea
+                value={newContent}
+                onChange={(e) => setNewContent(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
+                placeholder="Viết bình luận..."
+                rows={1}
+                className="max-h-20 flex-1 resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-text-muted"
+              />
+            </div>
+
+            {/* Send */}
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={
+                isPending || (!newContent.trim() && mediaFiles.length === 0)
+              }
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white shadow-md transition active:scale-95 disabled:opacity-50"
+              title="Gửi"
+            >
+              {isPending ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

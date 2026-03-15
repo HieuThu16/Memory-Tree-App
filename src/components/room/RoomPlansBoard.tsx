@@ -28,9 +28,31 @@ type Props = {
 };
 
 // Sprout icons for pending plans – each plan gets a different sprout based on its index
-const SPROUT_ICONS = ["🌱", "🌿", "☘️", "🍀", "🌾", "🪴", "🎋", "🎍", "🌵", "🪻"];
+const SPROUT_ICONS = [
+  "🌱",
+  "🌿",
+  "☘️",
+  "🍀",
+  "🌾",
+  "🪴",
+  "🎋",
+  "🎍",
+  "🌵",
+  "🪻",
+];
 // Flower icons for completed plans – each plan blooms into a different flower
-const FLOWER_ICONS = ["🌸", "🌺", "🌻", "🌼", "🌷", "🌹", "💐", "🪷", "🏵️", "💮"];
+const FLOWER_ICONS = [
+  "🌸",
+  "🌺",
+  "🌻",
+  "🌼",
+  "🌷",
+  "🌹",
+  "💐",
+  "🪷",
+  "🏵️",
+  "💮",
+];
 
 // Simple hash to deterministically assign an icon based on plan title
 function hashString(str: string): number {
@@ -41,7 +63,13 @@ function hashString(str: string): number {
   return Math.abs(hash);
 }
 
-function PlanIcon({ title, isCompleted }: { title: string; isCompleted: boolean }) {
+function PlanIcon({
+  title,
+  isCompleted,
+}: {
+  title: string;
+  isCompleted: boolean;
+}) {
   const idx = hashString(title);
   const icon = isCompleted
     ? FLOWER_ICONS[idx % FLOWER_ICONS.length]
@@ -79,6 +107,7 @@ export default function RoomPlansBoard({
   const [editingTitle, setEditingTitle] = useState("");
   const [editingDescription, setEditingDescription] = useState("");
   const [editingCategory, setEditingCategory] = useState("Dự định gần");
+  const [isAdding, setIsAdding] = useState(false);
   const [planFilter, setPlanFilter] = useState<PlanFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [isPending, startTransition] = useTransition();
@@ -184,7 +213,9 @@ export default function RoomPlansBoard({
     }
 
     if (categoryFilter !== "all") {
-      result = result.filter((plan) => parsePlanDescription(plan.description).cat === categoryFilter);
+      result = result.filter(
+        (plan) => parsePlanDescription(plan.description).cat === categoryFilter,
+      );
     }
 
     return result;
@@ -192,8 +223,12 @@ export default function RoomPlansBoard({
 
   useEffect(() => {
     setEditingTitle(selectedPlan?.title ?? "");
-    setEditingDescription(parsePlanDescription(selectedPlan?.description ?? "").text);
-    setEditingCategory(parsePlanDescription(selectedPlan?.description ?? "").cat);
+    setEditingDescription(
+      parsePlanDescription(selectedPlan?.description ?? "").text,
+    );
+    setEditingCategory(
+      parsePlanDescription(selectedPlan?.description ?? "").cat,
+    );
   }, [selectedPlan]);
 
   const getDisplayName = (userId: string | null) => {
@@ -238,6 +273,7 @@ export default function RoomPlansBoard({
 
       setTitle("");
       setDescription("");
+      setIsAdding(false);
       addToast("Đã thêm dự định mới.", "success");
     });
   };
@@ -298,7 +334,10 @@ export default function RoomPlansBoard({
         .from("room_plans")
         .update({
           title: resolvedTitle,
-          description: formatPlanDescription(editingCategory, editingDescription.trim()),
+          description: formatPlanDescription(
+            editingCategory,
+            editingDescription.trim(),
+          ),
           updated_at: new Date().toISOString(),
         })
         .eq("id", selectedPlan.id)
@@ -357,54 +396,81 @@ export default function RoomPlansBoard({
         </div>
       ) : null}
 
-      <div className="rounded-2xl border border-border bg-white/85 p-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
-          🌱 Gieo hạt dự định
+      {/* Header with stats and add button */}
+      <div className="flex items-center justify-between gap-2 px-1">
+        <p className="text-xs font-semibold text-text-secondary">
+          {filteredPlans.length} / {plans.length} dự định
         </p>
-        <div className="mt-2 grid gap-2">
-          <input
-            type="text"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="Dự định mới..."
-            disabled={isPending}
-            className="input-field !rounded-xl !py-2.5 text-sm"
-          />
-          <select
-            value={category}
-            onChange={(event) => setCategory(event.target.value)}
-            disabled={isPending}
-            className="input-field !rounded-xl !py-2.5 text-sm"
-          >
-            <option value="Dự định gần">Dự định gần</option>
-            <option value="1-2 năm">1-2 năm</option>
-            <option value="5-10 năm">5-10 năm</option>
-          </select>
-          <textarea
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="Mô tả chi tiết..."
-            rows={2}
-            disabled={isPending}
-            className="input-field resize-none !rounded-xl !py-2.5 text-sm"
-          />
-          <button
-            type="button"
-            onClick={handleCreatePlan}
-            disabled={isPending}
-            className="btn-primary rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-60"
-          >
-            {isPending ? "Đang gieo..." : "🌱 Gieo mầm dự định"}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setIsAdding(true)}
+          className="btn-primary rounded-full px-3 py-1.5 text-xs font-bold"
+        >
+          + Thêm 🌱
+        </button>
       </div>
 
+      {/* Create Modal */}
+      {isAdding && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <p className="text-sm font-semibold uppercase tracking-[0.1em] text-text-secondary">
+                🌱 Gieo hạt dự định
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsAdding(false)}
+                className="rounded-full bg-slate-100 p-1.5 text-text-muted transition-colors hover:bg-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4 grid gap-3">
+              <input
+                type="text"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Dự định mới..."
+                disabled={isPending}
+                className="input-field !rounded-xl !py-2.5 text-sm"
+              />
+              <select
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                disabled={isPending}
+                aria-label="Kỳ hạn dự định mới"
+                className="input-field !rounded-xl !py-2.5 text-sm"
+              >
+                <option value="Dự định gần">Dự định gần</option>
+                <option value="1-2 năm">1-2 năm</option>
+                <option value="5-10 năm">5-10 năm</option>
+              </select>
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Mô tả chi tiết..."
+                rows={3}
+                disabled={isPending}
+                className="input-field resize-none !rounded-xl !py-2.5 text-sm"
+              />
+              <button
+                type="button"
+                onClick={handleCreatePlan}
+                disabled={isPending}
+                className="btn-primary mt-2 rounded-full px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
+              >
+                {isPending ? "Đang gieo..." : "🌱 Gieo mầm dự định"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* List container */}
       <div className="rounded-2xl border border-border bg-white/85 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-text-secondary">
-            {filteredPlans.length}/{plans.length} dự định
-          </p>
-          <div className="inline-flex rounded-full border border-border bg-white p-1">
+        <div className="flex flex-col gap-2 border-b border-border pb-2 mb-2">
+          <div className="inline-flex rounded-full border border-border bg-white p-1 self-start">
             <button
               type="button"
               onClick={() => setPlanFilter("all")}
@@ -440,20 +506,22 @@ export default function RoomPlansBoard({
               Đã xong
             </button>
           </div>
-          <div className="inline-flex flex-wrap gap-1.5 mt-2 w-full border-t border-border pt-2">
-            <span className="text-[10px] text-text-muted mr-1 my-auto">Loại:</span>
+          <div className="inline-flex flex-wrap gap-1.5 w-full">
+            <span className="text-[10px] text-text-muted mr-1 my-auto">
+              Loại:
+            </span>
             {["all", "Dự định gần", "1-2 năm", "5-10 năm"].map((cat) => (
-               <button
-                 key={cat}
-                 onClick={() => setCategoryFilter(cat)}
-                 className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition border ${
-                   categoryFilter === cat
-                     ? "border-accent bg-accent text-white"
-                     : "border-border bg-white text-text-secondary hover:border-accent"
-                 }`}
-               >
-                 {cat === "all" ? "Tất cả kỳ hạn" : cat}
-               </button>
+              <button
+                key={cat}
+                onClick={() => setCategoryFilter(cat)}
+                className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition border ${
+                  categoryFilter === cat
+                    ? "border-accent bg-accent text-white"
+                    : "border-border bg-white text-text-secondary hover:border-accent"
+                }`}
+              >
+                {cat === "all" ? "Tất cả kỳ hạn" : cat}
+              </button>
             ))}
           </div>
         </div>
@@ -483,7 +551,10 @@ export default function RoomPlansBoard({
                         : "Đánh dấu hoàn thành"
                     }
                   >
-                    <PlanIcon title={plan.title} isCompleted={plan.is_completed} />
+                    <PlanIcon
+                      title={plan.title}
+                      isCompleted={plan.is_completed}
+                    />
                   </button>
                   <button
                     type="button"
@@ -500,7 +571,8 @@ export default function RoomPlansBoard({
                       {plan.title}
                     </p>
                     <p className="mt-1 truncate text-xs text-text-secondary">
-                      {parsePlanDescription(plan.description).text || "Chưa có mô tả"}
+                      {parsePlanDescription(plan.description).text ||
+                        "Chưa có mô tả"}
                     </p>
                     <div className="mt-1 flex items-center gap-2">
                       <span className="rounded-full bg-emerald-50 text-emerald-700 px-1.5 py-0.5 text-[9px] font-semibold">
@@ -528,23 +600,42 @@ export default function RoomPlansBoard({
       </div>
 
       {selectedPlan ? (
-        <div className="fixed inset-0 z-[90] h-[100dvh] w-screen bg-white">
-          <div className="flex h-full flex-col">
-            <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-              <BackButton onClick={() => setDetailPlanId(null)} />
-              <p className="truncate text-sm font-semibold text-foreground">
-                📝 Chi tiết dự định
-              </p>
-              <button
-                type="button"
-                onClick={() => handleDeletePlan(selectedPlan.id)}
-                className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600"
-              >
-                🗑 Xóa
-              </button>
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 px-3 py-4 backdrop-blur-sm"
+          onClick={() => setDetailPlanId(null)}
+        >
+          <div
+            className="flex h-[88dvh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-border bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-3 sm:px-4">
+              <div className="flex min-w-0 items-center gap-2">
+                <BackButton onClick={() => setDetailPlanId(null)} />
+                <p className="truncate text-sm font-semibold text-foreground sm:text-base">
+                  📝 Chi tiết dự định
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleUpdatePlan}
+                  disabled={isPending}
+                  className="rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-text-secondary hover:border-accent hover:text-accent disabled:opacity-60"
+                >
+                  {isPending ? "Đang sửa..." : "✏️ Sửa"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeletePlan(selectedPlan.id)}
+                  disabled={isPending}
+                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 disabled:opacity-60"
+                >
+                  🗑 Xóa
+                </button>
+              </div>
             </div>
 
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-4 sm:px-4">
               <div className="rounded-2xl border border-border bg-white/85 p-3">
                 <label className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-muted">
                   Tên dự định
@@ -567,6 +658,7 @@ export default function RoomPlansBoard({
                   value={editingCategory}
                   onChange={(event) => setEditingCategory(event.target.value)}
                   disabled={isPending}
+                  aria-label="Kỳ hạn dự định"
                   className="input-field mt-2 !rounded-xl !py-2.5 text-sm"
                 >
                   <option value="Dự định gần">Dự định gần</option>
@@ -613,20 +705,43 @@ export default function RoomPlansBoard({
                   disabled={isPending}
                   className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-2 text-xs font-semibold text-text-secondary"
                 >
-                  <PlanIcon title={selectedPlan.title} isCompleted={selectedPlan.is_completed} />
+                  <PlanIcon
+                    title={selectedPlan.title}
+                    isCompleted={selectedPlan.is_completed}
+                  />
                   <span>
                     {selectedPlan.is_completed
                       ? "Bỏ đánh dấu"
                       : "Đánh dấu hoàn thành"}
                   </span>
                 </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 border-t border-border bg-white/95 px-3 py-2 sm:px-4">
+              <button
+                type="button"
+                onClick={() => setDetailPlanId(null)}
+                className="rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-text-secondary"
+              >
+                ← Back
+              </button>
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={handleUpdatePlan}
                   disabled={isPending}
-                  className="btn-primary rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-60"
+                  className="btn-primary rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
                 >
-                  {isPending ? "Đang lưu..." : "💾 Lưu thay đổi"}
+                  {isPending ? "Đang sửa..." : "✏️ Sửa"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeletePlan(selectedPlan.id)}
+                  disabled={isPending}
+                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 disabled:opacity-60"
+                >
+                  🗑 Xóa
                 </button>
               </div>
             </div>
