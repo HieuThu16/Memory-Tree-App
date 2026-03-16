@@ -3,6 +3,11 @@
 import type { MemoryParticipant, MemoryRecord } from "@/lib/types";
 import { getParticipantAppearance } from "@/lib/memberAppearance";
 import { getMediaPublicUrl, getPrimaryMedia } from "@/lib/media";
+import {
+  flowerConceptFromMemory,
+  getFlowerSpeciesByConcept,
+  getFlowerThemeClass,
+} from "./flowerConcept";
 
 const typeStyles: Record<string, { icon: string; badge: string }> = {
   diary: { icon: "📝", badge: "badge-diary" },
@@ -15,23 +20,25 @@ const formatDate = (memory: MemoryRecord) => {
   const raw = memory.date ?? memory.created_at;
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return "?";
-  return new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = date.getMonth() + 1;
+  const year = date.getFullYear();
+
+  return `${day} thg ${month}, ${year}`;
 };
 
 const formatCreatedAt = (memory: MemoryRecord) => {
   const date = new Date(memory.created_at);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+
+  return `${hour}:${minute} ${day}/${month}/${year}`;
 };
 
 const formatEventTime = (value: string | null) => {
@@ -41,13 +48,11 @@ const formatEventTime = (value: string | null) => {
 
 export default function MemoryCard({
   memory,
-  index = 0,
   onSelect,
   participant,
   animated = true,
 }: {
   memory: MemoryRecord;
-  index?: number;
   onSelect?: (memory: MemoryRecord) => void;
   participant?: MemoryParticipant;
   animated?: boolean;
@@ -58,12 +63,15 @@ export default function MemoryCard({
   const mediaUrl = primaryMedia
     ? getMediaPublicUrl(primaryMedia.storage_path)
     : null;
+  const flowerConcept = flowerConceptFromMemory(memory);
+  const flowerThemeClass = getFlowerThemeClass(flowerConcept);
+  const flowerSpecies = getFlowerSpeciesByConcept(flowerConcept);
 
   return (
     <button
       type="button"
       onClick={() => onSelect?.(memory)}
-      className="glass-card glass-card-hover group w-full rounded-xl p-3 text-left sm:rounded-2xl sm:p-4"
+      className={`glass-card glass-card-hover memory-flower-card ${flowerThemeClass} group w-full rounded-xl border p-3 text-left sm:rounded-2xl sm:p-4`}
     >
       {primaryMedia && mediaUrl ? (
         <div className="mb-3 overflow-hidden rounded-lg border border-border bg-white/65 sm:rounded-xl">
@@ -96,18 +104,15 @@ export default function MemoryCard({
             <span className={`badge ${style.badge} !px-2 !py-0.5 !text-[9px]`}>
               {style.icon}
             </span>
-            {appearance ? (
-              <div
-                className="flex h-5 w-5 items-center justify-center rounded-full text-[6px] font-bold"
-                style={{
-                  backgroundColor: appearance.softColor,
-                  color: appearance.strongColor,
-                }}
-                title={appearance.displayName}
+            <span className="memory-flower-chip inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-text-secondary">
+              <span
+                className={`memory-flower-icon ${flowerSpecies.motionClass}`}
               >
-                {appearance.initials.slice(0, 2)}
-              </div>
-            ) : null}
+                {flowerSpecies.icon}
+              </span>
+              {flowerSpecies.name}
+            </span>
+            {/* Avatar removed as per request */}
           </div>
           <h3 className="mt-1.5 truncate text-sm font-semibold text-foreground transition-colors group-hover:text-accent">
             {memory.title}
@@ -120,17 +125,17 @@ export default function MemoryCard({
           {memory.category || memory.location ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {memory.category ? (
-                <span className="rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] font-medium text-text-secondary">
+                <span className="memory-flower-chip rounded-full border px-2 py-1 text-[10px] font-medium text-text-secondary">
                   ✿ {memory.category}
                 </span>
               ) : null}
               {memory.with_whom ? (
-                <span className="rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] font-medium text-text-secondary">
+                <span className="memory-flower-chip rounded-full border px-2 py-1 text-[10px] font-medium text-text-secondary">
                   👥 {memory.with_whom}
                 </span>
               ) : null}
               {memory.location ? (
-                <span className="rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] font-medium text-text-secondary">
+                <span className="memory-flower-chip rounded-full border px-2 py-1 text-[10px] font-medium text-text-secondary">
                   📍 {memory.location}
                 </span>
               ) : null}

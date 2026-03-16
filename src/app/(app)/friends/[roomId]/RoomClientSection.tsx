@@ -14,7 +14,17 @@ import MemoryList from "@/components/memory/MemoryList";
 import type { MemoryParticipant, MemoryRecord } from "@/lib/types";
 import { useMemoryStore } from "@/lib/stores/memoryStore";
 import { useTreeStore } from "@/lib/stores/treeStore";
-import ConnectedUsersBanner from "@/components/realtime/ConnectedUsersBanner";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { MEMORY_SELECT } from "@/lib/supabase/selects";
+import { useUiStore } from "@/lib/stores/uiStore";
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+
+  return Uint8Array.from(rawData, (char) => char.charCodeAt(0));
+}
 
 const MemoryMap = dynamic(() => import("@/components/memory/MemoryMap"), {
   ssr: false,
@@ -38,6 +48,9 @@ export default function RoomClientSection({
 }) {
   const openCreate = useTreeStore((s) => s.openCreate);
   const hydrateScope = useMemoryStore((s) => s.hydrateScope);
+  const upsertMemory = useMemoryStore((s) => s.upsertMemory);
+  const removeMemory = useMemoryStore((s) => s.removeMemory);
+  const addToast = useUiStore((s) => s.addToast);
   const scopedMemories = useMemoryStore((s) =>
     s.scopeKey === `room:${roomId}` ? s.memories : memories,
   );
@@ -52,13 +65,6 @@ export default function RoomClientSection({
   );
 
   const isTwoPerson = participants.length === 2;
-  const friendParticipant = useMemo(
-    () =>
-      participants.find(
-        (participant) => participant.userId !== currentUserId,
-      ) ?? null,
-    [currentUserId, participants],
-  );
   const [isSwitchingView, startSwitchViewTransition] = useTransition();
   const [memoryViewMode, setMemoryViewMode] = useState<
     "tree" | "gallery" | "map" | "list"
@@ -78,6 +84,133 @@ export default function RoomClientSection({
   useEffect(() => {
     hydrateScope(`room:${roomId}`, memories);
   }, [hydrateScope, memories, roomId]);
+
+  useEffect(() => {
+    const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!publicKey) return;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+
+    let isCancelled = false;
+
+    const registerPushSubscription = async () => {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted" || isCancelled) return;
+
+      const registration = await navigator.serviceWorker.ready;
+      if (isCancelled) return;
+
+      const existingSubscription = await registration.pushManager.getSubscription();
+      const subscription =
+        existingSubscription ??
+        (await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        }));
+
+      if (isCancelled) return;
+
+      const supabase = createSupabaseBrowserClient();
+      await supabase.from("push_subscriptions").upsert(
+        {
+          user_id: currentUserId,
+          room_id: roomId,
+          subscription: JSON.stringify(subscription.toJSON()),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
+    };
+
+    void registerPushSubscription();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentUserId, roomId]);
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase
+      .channel(`room_memories:${roomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "memories",
+          filter: `room_id=eq.${roomId}`,
+        },
+        async (payload) => {
+          const inserted = payload.new as { id?: string; user_id?: string };
+          if (!inserted?.id) return;
+
+          const { data } = await supabase
+            .from("memories")
+            .select(MEMORY_SELECT)
+            .eq("id", inserted.id)
+            .single();
+
+          if (!data) return;
+          upsertMemory(data as MemoryRecord);
+
+          if (inserted.user_id && inserted.user_id !== currentUserId) {
+            const partnerName =
+              participantsByUserId.get(inserted.user_id)?.displayName ??
+              "Người ấy";
+            addToast(`${partnerName} vừa thêm kỉ niệm mới 🌸`, "info");
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "memories",
+          filter: `room_id=eq.${roomId}`,
+        },
+        async (payload) => {
+          const updated = payload.new as { id?: string };
+          if (!updated?.id) return;
+
+          const { data } = await supabase
+            .from("memories")
+            .select(MEMORY_SELECT)
+            .eq("id", updated.id)
+            .single();
+
+          if (!data) return;
+          upsertMemory(data as MemoryRecord);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "memories",
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          const removed = payload.old as { id?: string };
+          if (removed?.id) {
+            removeMemory(removed.id);
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [
+    addToast,
+    currentUserId,
+    participantsByUserId,
+    removeMemory,
+    roomId,
+    upsertMemory,
+  ]);
 
   const filteredMemories = useMemo(() => {
     let result = scopedMemories;
@@ -135,30 +268,6 @@ export default function RoomClientSection({
             <span className="rounded-full border border-border bg-white/75 px-3 py-1.5 text-[10px] font-semibold text-text-secondary">
               🌸 {filteredMemories.length} / {scopedMemories.length}
             </span>
-            {friendParticipant ? (
-              <div className="inline-flex min-w-0 items-center gap-2 rounded-full border border-border bg-white/80 px-2.5 py-1.5 text-[10px] font-semibold text-text-secondary">
-                <div className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full border border-white/60 bg-white shadow-sm">
-                  {friendParticipant.avatarUrl ? (
-                    <img
-                      src={friendParticipant.avatarUrl}
-                      alt={friendParticipant.displayName}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <span>
-                      {friendParticipant.displayName.slice(0, 1).toUpperCase()}
-                    </span>
-                  )}
-                </div>
-                <span className="max-w-[110px] truncate">
-                  {friendParticipant.displayName}
-                </span>
-              </div>
-            ) : (
-              <span className="rounded-full border border-dashed border-border bg-white/65 px-3 py-1.5 text-[10px] font-semibold text-text-muted">
-                Chờ thêm 1 người bạn
-              </span>
-            )}
           </div>
           <button
             type="button"
@@ -168,13 +277,6 @@ export default function RoomClientSection({
             + Góp 🌱
           </button>
         </div>
-
-        {/* Connected users presence banner */}
-        <ConnectedUsersBanner
-          participants={participants}
-          currentUserId={currentUserId}
-        />
-
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <input

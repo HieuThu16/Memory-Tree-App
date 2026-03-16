@@ -1,7 +1,8 @@
 @import "tailwindcss";
+@import "../components/memory/flowerTheme.css";
 
 :root {
-  --background: #f5f0e8;
+  --background: #fdfaf5;
   --foreground: #2f2743;
   --surface: rgba(255, 255, 255, 0.82);
   --surface-2: #f6f0ff;
@@ -54,21 +55,23 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
+    url("https://www.transparenttextures.com/patterns/p6.png"),
     radial-gradient(
-      ellipse 980px 620px at 10% 0%,
-      rgba(174, 153, 255, 0.34) 0%,
+      circle at 0% 0%,
+      rgba(174, 153, 255, 0.38) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(138, 220, 176, 0.28) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      circle at 50% 100%,
+      rgba(255, 192, 203, 0.3) 0%,
       transparent 70%
-    ),
-    radial-gradient(
-      ellipse 760px 540px at 92% 8%,
-      rgba(138, 220, 176, 0.22) 0%,
-      transparent 62%
-    ),
-    radial-gradient(
-      ellipse 820px 560px at 50% 100%,
-      rgba(255, 230, 185, 0.24) 0%,
-      transparent 65%
     );
+  opacity: 0.85;
 }
 
 h1,

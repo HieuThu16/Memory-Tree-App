@@ -52,19 +52,21 @@ const DIRECTIONS: ParticleDirection[] = [
   "diagonal-dr",
 ];
 
+const LEAF_SYMBOLS = ["🍃", "🍂", "🍁", "🌿"];
+
 function NatureParticles() {
   const [particles, setParticles] = useState<Particle[]>([]);
 
   useEffect(() => {
     const items: Particle[] = [];
 
-    // More butterflies flying in various directions
-    for (let i = 0; i < 12; i++) {
+    // Butterflies
+    for (let i = 0; i < 15; i++) {
       items.push({
         id: i,
         x: Math.random() * 100,
         y: Math.random() * 100,
-        size: 16 + Math.random() * 14,
+        size: 14 + Math.random() * 12,
         delay: Math.random() * -12,
         duration: 12 + Math.random() * 18,
         symbol:
@@ -72,38 +74,39 @@ function NatureParticles() {
             Math.floor(Math.random() * BUTTERFLY_SYMBOLS.length)
           ],
         direction: DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)],
-        opacity: 0.5 + Math.random() * 0.4,
+        opacity: 0.4 + Math.random() * 0.4,
       });
     }
 
-    // Flowers floating up, down and diagonal
-    for (let i = 12; i < 30; i++) {
+    // Falling Flowers (Increased count)
+    for (let i = 15; i < 60; i++) {
       items.push({
         id: i,
         x: Math.random() * 100,
         y: Math.random() * 100,
-        size: 10 + Math.random() * 16,
-        delay: Math.random() * -15,
-        duration: 14 + Math.random() * 20,
+        size: 12 + Math.random() * 14,
+        delay: Math.random() * -20,
+        duration: 20 + Math.random() * 25,
         symbol:
           FLOWER_SYMBOLS[Math.floor(Math.random() * FLOWER_SYMBOLS.length)],
-        direction: DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)],
-        opacity: 0.3 + Math.random() * 0.45,
+        direction: "down", // Forced falling effect
+        opacity: 0.25 + Math.random() * 0.45,
       });
     }
 
-    // Sparkles scattered everywhere
-    for (let i = 30; i < 42; i++) {
+    // Falling Leaves (New dedicated section)
+    for (let i = 60; i < 100; i++) {
       items.push({
         id: i,
         x: Math.random() * 100,
         y: Math.random() * 100,
-        size: 8 + Math.random() * 10,
-        delay: Math.random() * -8,
-        duration: 8 + Math.random() * 12,
-        symbol: Math.random() > 0.4 ? "✨" : "🍃",
-        direction: DIRECTIONS[Math.floor(Math.random() * DIRECTIONS.length)],
-        opacity: 0.3 + Math.random() * 0.35,
+        size: 10 + Math.random() * 12,
+        delay: Math.random() * -25,
+        duration: 25 + Math.random() * 30,
+        symbol:
+          LEAF_SYMBOLS[Math.floor(Math.random() * LEAF_SYMBOLS.length)],
+        direction: "diagonal-dr", // Drifting fall
+        opacity: 0.2 + Math.random() * 0.4,
       });
     }
 

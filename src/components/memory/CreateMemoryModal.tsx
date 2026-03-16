@@ -8,20 +8,20 @@ import { useTreeStore } from "@/lib/stores/treeStore";
 import { useUiStore } from "@/lib/stores/uiStore";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { deleteMedia, createMemory, updateMemory } from "@/lib/actions";
+import {
+  FLOWER_COMPONENTS,
+  FLOWER_PALETTES,
+  FLOWER_CONCEPT_LABELS,
+  normalizeFlowerConcept,
+} from "../tree/flowers";
+import {
+  flowerConceptFromMemory,
+  getFlowerThemeClass,
+  randomFlowerConcept,
+} from "./flowerConcept";
 import MediaUploader, { type UploadableFile } from "./MediaUploader";
 
-const categorySuggestions = [
-  "Cột mốc",
-  "Cột mốc lần 1",
-  "Cột mốc lần 2",
-  "Gia đình",
-  "Tình yêu",
-  "Bạn bè",
-  "Du lịch",
-  "Sinh nhật",
-  "Công việc",
-  "Thường ngày",
-];
+const categorySuggestions = [...FLOWER_CONCEPT_LABELS];
 
 const categoryIcons: Record<string, string> = {
   "Cột mốc": "🏆",
@@ -36,13 +36,76 @@ const categoryIcons: Record<string, string> = {
   "Thường ngày": "☀️",
 };
 
+function FlowerConceptPreview({ concept }: { concept: number }) {
+  const safeConcept = normalizeFlowerConcept(concept);
+  const Flower = FLOWER_COMPONENTS[safeConcept - 1];
+  const [c1, c2] = FLOWER_PALETTES[safeConcept - 1];
+  return (
+    <div
+      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-rose-200/70 bg-rose-50/80"
+      title="Hoa đại diện tự động"
+    >
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
+        <style>{`
+          .modal-concept-core { transform-box: fill-box; transform-origin: center; }
+          .modal-concept-halo { transform-box: fill-box; transform-origin: center; animation: modalConceptHalo 2.4s ease-in-out infinite; }
+          @keyframes modalConceptCore {
+            0%,100% { transform: rotate(-2deg) scale(0.97); }
+            50% { transform: rotate(2deg) scale(1.07); }
+          }
+          @keyframes modalConceptHalo {
+            0%,100% { transform: scale(0.8); opacity: 0.15; }
+            45% { transform: scale(1.22); opacity: 0.38; }
+          }
+          .modal-core-1 { animation: modalConceptCore 3.4s ease-in-out infinite; }
+          .modal-core-2 { animation: modalConceptCore 2.4s cubic-bezier(.55,.08,.28,.98) infinite; }
+          .modal-core-3 { animation: modalConceptCore 2.9s ease-in-out infinite; }
+          .modal-core-4 { animation: modalConceptCore 4.7s ease-in-out infinite; }
+          .modal-core-5 { animation: modalConceptCore 2.2s ease-in-out infinite; }
+          .modal-core-6 { animation: modalConceptCore 2.05s ease-in-out infinite; }
+          .modal-core-7 { animation: modalConceptCore 2.65s ease-in-out infinite; }
+          .modal-core-8 { animation: modalConceptCore 3.75s ease-in-out infinite; }
+          .modal-core-9 { animation: modalConceptCore 3.05s ease-in-out infinite; }
+          .modal-core-10 { animation: modalConceptCore 4.2s ease-in-out infinite; }
+        `}</style>
+        <circle
+          cx={14}
+          cy={14}
+          r={9.6}
+          fill={c1}
+          opacity="0.18"
+          className="modal-concept-halo"
+        />
+        <circle
+          cx={14}
+          cy={14}
+          r={11.1}
+          fill={c2}
+          opacity="0.1"
+          className="modal-concept-halo"
+        />
+        <g className={`modal-concept-core modal-core-${safeConcept}`}>
+          <Flower
+            x={14}
+            y={14}
+            size={20}
+            active
+            gid={`modal-concept-${safeConcept}`}
+            c1={c1}
+            c2={c2}
+          />
+        </g>
+      </svg>
+    </div>
+  );
+}
+
 export default function CreateMemoryModal() {
   const { isCreateOpen, closeCreate, targetRoomId, editingMemory } =
     useTreeStore();
   const addToast = useUiStore((s) => s.addToast);
   const upsertMemory = useMemoryStore((s) => s.upsertMemory);
   const prependHistory = useMemoryStore((s) => s.prependHistory);
-  const isPersonalMemory = !targetRoomId;
   const isEditing = !!editingMemory;
 
   const [title, setTitle] = useState("");
@@ -52,8 +115,14 @@ export default function CreateMemoryModal() {
   const [withWhom, setWithWhom] = useState("");
   const [eventTime, setEventTime] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [files, setFiles] = useState<UploadableFile[]>([]);
+  const [activeConcept, setActiveConcept] = useState<number>(() =>
+    randomFlowerConcept(),
+  );
   const [isPending, startTransition] = useTransition();
+
+  const flowerThemeClass = getFlowerThemeClass(activeConcept);
 
   const handleGetCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -75,7 +144,7 @@ export default function CreateMemoryModal() {
           } else {
             setLocation(`${latitude}, ${longitude}`);
           }
-        } catch (e) {
+        } catch {
           addToast("Không thể phân tích vị trí", "error");
         }
       },
@@ -132,6 +201,7 @@ export default function CreateMemoryModal() {
   // Load exiting memory when editing
   useEffect(() => {
     if (isCreateOpen && editingMemory) {
+      setActiveConcept(flowerConceptFromMemory(editingMemory));
       setTitle(editingMemory.title || "");
       setContent(editingMemory.content || "");
       setCategory(editingMemory.category || "");
@@ -148,6 +218,15 @@ export default function CreateMemoryModal() {
           .slice(0, 10);
       }
       setDate(initialDate);
+      setShowAdvanced(
+        Boolean(
+          editingMemory.category ||
+          editingMemory.with_whom ||
+          editingMemory.event_time,
+        ),
+      );
+    } else if (isCreateOpen && !editingMemory) {
+      setActiveConcept(randomFlowerConcept());
     } else if (!isCreateOpen) {
       setTitle("");
       setContent("");
@@ -156,7 +235,9 @@ export default function CreateMemoryModal() {
       setWithWhom("");
       setEventTime("");
       setDate(new Date().toISOString().slice(0, 10));
+      setShowAdvanced(false);
       setFiles([]);
+      setActiveConcept(randomFlowerConcept());
     }
   }, [isCreateOpen, editingMemory]);
 
@@ -168,6 +249,7 @@ export default function CreateMemoryModal() {
     setWithWhom("");
     setEventTime("");
     setDate(new Date().toISOString().slice(0, 10));
+    setShowAdvanced(false);
     setFiles([]);
   };
 
@@ -340,7 +422,7 @@ export default function CreateMemoryModal() {
           onClick={closeCreate}
         >
           <motion.div
-            className="glass-card relative mt-auto flex max-h-[92dvh] w-full max-w-md flex-col rounded-2xl shadow-[var(--shadow-card)] sm:mt-0 sm:max-w-lg sm:rounded-3xl"
+            className={`glass-card memory-flower-panel ${flowerThemeClass} relative mt-auto flex max-h-[92dvh] w-full max-w-md flex-col rounded-2xl shadow-[var(--shadow-card)] sm:mt-0 sm:max-w-lg sm:rounded-3xl`}
             initial={{ y: "100%", opacity: 0, scale: 0.95 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: "100%", opacity: 0, scale: 0.95 }}
@@ -358,25 +440,28 @@ export default function CreateMemoryModal() {
             {/* Drag Handle for Mobile */}
             <div className="absolute left-1/2 top-2 h-1.5 w-12 -translate-x-1/2 rounded-full bg-black/15 sm:hidden" />
             {/* Fixed Header */}
-            <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-5">
+            <div className="memory-flower-header flex items-center justify-between border-b px-4 py-3 sm:px-5">
               <div className="flex items-center gap-2">
                 <span className="text-lg">{isEditing ? "✏️" : "🌱"}</span>
                 <h2 className="text-base font-semibold text-foreground sm:text-lg">
                   {isEditing ? "Sửa kỉ niệm" : "Tạo kỉ niệm"}
                 </h2>
               </div>
-              <button
-                type="button"
-                onClick={closeCreate}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-muted transition hover:border-accent hover:text-foreground"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-2">
+                <FlowerConceptPreview concept={activeConcept} />
+                <button
+                  type="button"
+                  onClick={closeCreate}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-text-muted transition hover:border-accent hover:text-foreground"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             {/* Scrollable Body */}
             <div
-              className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4 overscroll-contain"
+              className="memory-flower-body min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4 overscroll-contain"
               onPointerDownCapture={(e) => e.stopPropagation()}
             >
               {/* Title */}
@@ -454,96 +539,116 @@ export default function CreateMemoryModal() {
                 />
               </div>
 
-              {/* Category */}
+              {/* Date */}
               <div className="mt-3">
                 <label
-                  htmlFor="memory-category"
+                  htmlFor="memory-date"
                   className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
                 >
-                  ✿ Thể loại / Cột mốc
+                  🗓 Ngày
                 </label>
                 <input
-                  id="memory-category"
-                  type="text"
-                  placeholder="VD: Chuyến đi, Cột mốc lần 1..."
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
+                  id="memory-date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
                   className="input-field mt-1.5 !rounded-xl !py-2.5 !text-sm"
                 />
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {categorySuggestions.map((item) => {
-                    const active =
-                      category.trim().toLowerCase() === item.toLowerCase();
+              </div>
 
-                    return (
-                      <button
-                        key={item}
-                        type="button"
-                        onClick={() => setCategory(item)}
-                        className={`rounded-full border px-2.5 py-1 text-[10px] font-medium transition ${
-                          active
-                            ? "border-accent bg-accent text-white"
-                            : "border-border bg-white/75 text-text-secondary hover:border-accent hover:text-accent"
-                        }`}
+              {/* Advanced attributes */}
+              <div className="memory-flower-advanced mt-3 rounded-xl border">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced((prev) => !prev)}
+                  className="flex w-full items-center justify-between px-3 py-2.5 text-left"
+                >
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-secondary">
+                    ✿ Thuộc tính thêm
+                  </span>
+                  <span className="text-sm text-text-muted">
+                    {showAdvanced ? "▾" : "▸"}
+                  </span>
+                </button>
+
+                {showAdvanced ? (
+                  <div className="space-y-3 border-t border-border px-3 pb-3 pt-2.5">
+                    <div>
+                      <label
+                        htmlFor="memory-category"
+                        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
                       >
-                        {categoryIcons[item] || "✿"} {item}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                        ✿ Thể loại hoa
+                      </label>
+                      <input
+                        id="memory-category"
+                        type="text"
+                        placeholder="VD: Chuyến đi, Cột mốc lần 1..."
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        className="input-field mt-1.5 !rounded-xl !py-2.5 !text-sm"
+                      />
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {categorySuggestions.map((item) => {
+                          const active =
+                            category.trim().toLowerCase() ===
+                            item.toLowerCase();
 
-              {/* With Whom */}
-              <div className="mt-3">
-                <label
-                  htmlFor="memory-with"
-                  className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
-                >
-                  👥 Cùng với ai?
-                </label>
-                <input
-                  id="memory-with"
-                  type="text"
-                  placeholder="VD: Nguyễn Văn A, Tran B..."
-                  value={withWhom}
-                  onChange={(e) => setWithWhom(e.target.value)}
-                  className="input-field mt-1.5 !rounded-xl !py-2.5 !text-sm"
-                />
-              </div>
+                          return (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() => setCategory(item)}
+                              className={`rounded-full border px-2.5 py-1 text-[10px] font-medium transition ${
+                                active
+                                  ? "border-accent bg-accent text-white"
+                                  : "border-border bg-white/75 text-text-secondary hover:border-accent hover:text-accent"
+                              }`}
+                            >
+                              {categoryIcons[item] || "✿"} {item}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-              {/* Date + Time */}
-              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="memory-date"
-                    className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
-                  >
-                    🗓 Ngày
-                  </label>
-                  <input
-                    id="memory-date"
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="input-field mt-1.5 !rounded-xl !py-2.5 !text-sm"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="memory-time"
-                    className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
-                  >
-                    🕒 Giờ
-                  </label>
-                  <input
-                    id="memory-time"
-                    type="time"
-                    step={60}
-                    value={eventTime}
-                    onChange={(e) => setEventTime(e.target.value)}
-                    className="input-field mt-1.5 !rounded-xl !py-2.5 !text-sm"
-                  />
-                </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <div>
+                        <label
+                          htmlFor="memory-with"
+                          className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
+                        >
+                          👥 Cùng với ai?
+                        </label>
+                        <input
+                          id="memory-with"
+                          type="text"
+                          placeholder="VD: Nguyễn Văn A, Tran B..."
+                          value={withWhom}
+                          onChange={(e) => setWithWhom(e.target.value)}
+                          className="input-field mt-1.5 !rounded-xl !py-2.5 !text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="memory-time"
+                          className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
+                        >
+                          🕒 Giờ
+                        </label>
+                        <input
+                          id="memory-time"
+                          type="time"
+                          step={60}
+                          value={eventTime}
+                          onChange={(e) => setEventTime(e.target.value)}
+                          className="input-field mt-1.5 !rounded-xl !py-2.5 !text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               {/* Existing Media Display */}
@@ -611,7 +716,7 @@ export default function CreateMemoryModal() {
             </div>
 
             {/* Fixed Footer with action buttons - always visible */}
-            <div className="border-t border-border px-4 py-3 sm:px-5">
+            <div className="memory-flower-footer border-t px-4 py-3 sm:px-5">
               <div className="flex gap-2">
                 <button
                   type="button"

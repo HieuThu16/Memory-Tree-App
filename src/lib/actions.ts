@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import webpush from "web-push";
 import type {
   CreateMemoryInput,
   MemoryEditHistoryRecord,
+  MemoryRecord,
   MusicSearchResult,
   PlaylistRecord,
   PlaylistTrackRecord,
@@ -16,6 +18,36 @@ import { MEMORY_SELECT, PLAYLIST_SELECT } from "@/lib/supabase/selects";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const INVITE_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const MEMORY_SELECT_LEGACY =
+  "id, user_id, room_id, parent_id, title, content, category, location, date, type, position_x, position_y, created_at, media(id, memory_id, storage_path, media_type, thumbnail, duration, created_at)";
+
+type StoredPushSubscription = {
+  user_id: string;
+  room_id: string | null;
+  subscription: string;
+};
+
+type BrowserPushSubscription = {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys?: {
+    auth?: string;
+    p256dh?: string;
+  };
+};
+
+type PushError = {
+  statusCode?: number;
+};
+
+const isMissingMetadataColumn = (message?: string) => {
+  if (!message) return false;
+  const lowered = message.toLowerCase();
+  return (
+    lowered.includes("column") &&
+    (lowered.includes("with_whom") || lowered.includes("event_time"))
+  );
+};
 
 function generateInviteCode(length = 6) {
   return Array.from(
@@ -125,6 +157,114 @@ function formatComparableValue(value: unknown) {
   return String(value);
 }
 
+let webPushConfigured = false;
+const getVapidConfig = () => {
+  const subject = process.env.VAPID_SUBJECT;
+  const publicKey = process.env.VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+
+  if (!subject || !publicKey || !privateKey) {
+    return null;
+  }
+
+  return { subject, publicKey, privateKey };
+};
+
+const configureWebPush = () => {
+  if (webPushConfigured) return true;
+  const config = getVapidConfig();
+  if (!config) return false;
+
+  webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
+  webPushConfigured = true;
+  return true;
+};
+
+const parseStoredSubscription = (raw: string): webpush.PushSubscription | null => {
+  try {
+    const parsed = JSON.parse(raw) as BrowserPushSubscription;
+    if (!parsed?.endpoint) return null;
+
+    return {
+      endpoint: parsed.endpoint,
+      expirationTime: parsed.expirationTime ?? null,
+      keys: {
+        auth: parsed.keys?.auth ?? "",
+        p256dh: parsed.keys?.p256dh ?? "",
+      },
+    };
+  } catch {
+    return null;
+  }
+};
+
+const toLegacyMemoryPayload = (payload: Record<string, unknown>) => {
+  const legacyPayload = { ...payload };
+  delete legacyPayload.with_whom;
+  delete legacyPayload.event_time;
+  return legacyPayload;
+};
+
+async function notifyRoomMembersForNewMemory(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  currentUserId: string,
+  roomId: string,
+  memoryTitle: string,
+) {
+  if (!configureWebPush()) {
+    return;
+  }
+
+  const senderNameResult = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", currentUserId)
+    .maybeSingle();
+
+  const senderName = senderNameResult.data?.display_name ?? "Người ấy";
+
+  const { data: subscriptions } = await supabase
+    .from("push_subscriptions")
+    .select("user_id, room_id, subscription")
+    .eq("room_id", roomId)
+    .neq("user_id", currentUserId);
+
+  if (!subscriptions?.length) {
+    return;
+  }
+
+  const payload = JSON.stringify({
+    title: "Kỷ niệm mới vừa được thêm",
+    body: `${senderName} vừa thêm: ${memoryTitle}`,
+    url: `/friends/${roomId}`,
+    icon: "/icon.svg",
+    badge: "/icon.svg",
+  });
+
+  await Promise.all(
+    (subscriptions as StoredPushSubscription[]).map(async (row) => {
+      const parsed = parseStoredSubscription(row.subscription);
+      if (!parsed) return;
+
+      try {
+        await webpush.sendNotification(parsed, payload);
+      } catch (error: unknown) {
+        const statusCode =
+          typeof error === "object" && error !== null && "statusCode" in error
+            ? Number((error as PushError).statusCode)
+            : null;
+
+        if (statusCode === 404 || statusCode === 410) {
+          await supabase
+            .from("push_subscriptions")
+            .delete()
+            .eq("user_id", row.user_id);
+        }
+      }
+    }),
+  );
+}
+
 export async function createMemory(input: CreateMemoryInput) {
   const supabase = await createSupabaseServerClient();
   const {
@@ -135,26 +275,62 @@ export async function createMemory(input: CreateMemoryInput) {
     return { error: "Not authenticated" };
   }
 
+  const payload: Record<string, unknown> = {
+    user_id: user.id,
+    title: input.title,
+    content: input.content ?? null,
+    category: input.room_id ? null : input.category?.trim() || null,
+    with_whom: input.with_whom?.trim() || null,
+    event_time: input.event_time?.trim() || null,
+    location: input.location?.trim() || null,
+    type: input.type,
+    date: input.date || new Date().toISOString(),
+    room_id: input.room_id ?? null,
+    parent_id: input.parent_id ?? null,
+  };
+
   const { data, error } = await supabase
     .from("memories")
-    .insert({
-      user_id: user.id,
-      title: input.title,
-      content: input.content ?? null,
-      category: input.room_id ? null : input.category?.trim() || null,
-      with_whom: input.with_whom?.trim() || null,
-      event_time: input.event_time?.trim() || null,
-      location: input.location?.trim() || null,
-      type: input.type,
-      date: input.date || new Date().toISOString(),
-      room_id: input.room_id ?? null,
-      parent_id: input.parent_id ?? null,
-    })
+    .insert(payload)
     .select(MEMORY_SELECT)
     .single();
 
   if (error) {
+    if (isMissingMetadataColumn(error.message)) {
+      // Retry without metadata columns
+      const legacyPayload = toLegacyMemoryPayload(payload);
+      const { data: legacyData, error: legacyError } = await supabase
+        .from("memories")
+        .insert(legacyPayload)
+        .select(MEMORY_SELECT_LEGACY)
+        .single();
+
+      if (legacyError) {
+        return { error: legacyError.message };
+      }
+
+      if (input.room_id) {
+        await notifyRoomMembersForNewMemory(
+          supabase,
+          user.id,
+          input.room_id,
+          input.title,
+        );
+      }
+
+      revalidatePath("/", "layout");
+      return { data: { memory: legacyData as MemoryRecord } };
+    }
     return { error: error.message };
+  }
+
+  if (input.room_id) {
+    await notifyRoomMembersForNewMemory(
+      supabase,
+      user.id,
+      input.room_id,
+      input.title,
+    );
   }
 
   revalidatePath("/", "layout");
@@ -281,7 +457,21 @@ export async function updateMemory(
     .eq("id", id);
 
   if (error) {
-    return { error: error.message };
+    if (isMissingMetadataColumn(error.message)) {
+      const legacyPayload = toLegacyMemoryPayload(
+        payload as unknown as Record<string, unknown>,
+      );
+      const { error: legacyError } = await supabase
+        .from("memories")
+        .update(legacyPayload)
+        .eq("id", id);
+
+      if (legacyError) {
+        return { error: legacyError.message };
+      }
+    } else {
+      return { error: error.message };
+    }
   }
 
   const editorName = await getCurrentUserDisplayName(supabase, user);

@@ -75,39 +75,13 @@ export default async function RoomPage({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <BackButton href="/friends" className="text-[11px]" />
-              <div className="min-w-0">
-                <h1 className="truncate text-sm font-semibold text-foreground sm:text-base">
-                  🌿 {room.name || "Khu vườn chung"}
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-5 min-w-0">
+                <h1 className="flex items-center gap-1 truncate text-sm font-bold text-rose-900 sm:text-base">
+                  <span className="text-base">🌿</span> {room.name || "Khu vườn chung"}
                 </h1>
-                <div className="flex items-center gap-1.5 text-[9px] text-text-muted">
-                  <span className="font-mono tracking-wider">
-                    {roomRecord.invite_code ?? "------"}
-                  </span>
-                  <span>•</span>
-                  <span>{participants.length} 👥</span>
-                </div>
-                {friendParticipant ? (
-                  <div className="mt-1 flex items-center gap-1.5 text-[10px] text-text-secondary">
-                    <div className="flex h-5 w-5 items-center justify-center overflow-hidden rounded-full border border-white/60 bg-white/80">
-                      {friendParticipant.avatarUrl ? (
-                        <img
-                          src={friendParticipant.avatarUrl}
-                          alt={friendParticipant.displayName}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-[8px] font-semibold">
-                          {friendParticipant.displayName
-                            .slice(0, 1)
-                            .toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <span>
-                      Bạn đang chung vườn với {friendParticipant.displayName}
-                    </span>
-                  </div>
-                ) : null}
+                
+          
+      
               </div>
             </div>
             <div className="flex items-center gap-1">

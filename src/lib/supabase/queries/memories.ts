@@ -23,7 +23,11 @@ type GenericMemoryClient = {
 const isMissingMemoryMetadataColumn = (message?: string) => {
   if (!message) return false;
   const lowered = message.toLowerCase();
-  return lowered.includes("column") && lowered.includes("memories.with_whom");
+  return (
+    lowered.includes("column") &&
+    (lowered.includes("memories.with_whom") ||
+      lowered.includes("memories.event_time"))
+  );
 };
 
 const normalizeMemoryRow = (row: Record<string, unknown>): MemoryRecord => {

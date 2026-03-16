@@ -1,0 +1,680 @@
+.flower-theme-1 {
+  --flower-panel-bg:
+    radial-gradient(
+      circle at 16% 8%,
+      rgba(248, 187, 208, 0.28) 0%,
+      rgba(255, 255, 255, 0.95) 36%
+    ),
+    radial-gradient(
+      circle at 84% 14%,
+      rgba(236, 64, 122, 0.16) 0%,
+      rgba(255, 255, 255, 0.94) 40%
+    ),
+    linear-gradient(
+      160deg,
+      rgba(248, 187, 208, 0.14) 0%,
+      rgba(236, 64, 122, 0.1) 62%,
+      rgba(255, 255, 255, 0.9) 100%
+    );
+  --flower-header-bg: linear-gradient(
+    to right,
+    rgba(255, 228, 240, 0.9),
+    rgba(254, 205, 211, 0.7),
+    rgba(255, 255, 255, 0.82)
+  );
+  --flower-body-bg: linear-gradient(
+    to bottom,
+    rgba(255, 228, 240, 0.34),
+    rgba(255, 255, 255, 0.5),
+    rgba(254, 205, 211, 0.26)
+  );
+  --flower-advanced-bg: linear-gradient(
+    to bottom right,
+    rgba(255, 228, 240, 0.48),
+    rgba(254, 205, 211, 0.42)
+  );
+  --flower-footer-bg: linear-gradient(
+    to bottom,
+    rgba(254, 205, 211, 0.35),
+    rgba(255, 228, 240, 0.44)
+  );
+  --flower-card-bg: linear-gradient(
+    to bottom right,
+    rgba(255, 228, 240, 0.52),
+    rgba(255, 255, 255, 0.9)
+  );
+  --flower-chip-bg: rgba(255, 255, 255, 0.82);
+  --flower-border: rgba(251, 113, 133, 0.44);
+}
+
+.flower-theme-2 {
+  --flower-panel-bg:
+    radial-gradient(
+      circle at 14% 10%,
+      rgba(255, 245, 157, 0.3) 0%,
+      rgba(255, 255, 255, 0.95) 38%
+    ),
+    radial-gradient(
+      circle at 84% 10%,
+      rgba(249, 168, 37, 0.17) 0%,
+      rgba(255, 255, 255, 0.93) 44%
+    ),
+    linear-gradient(
+      170deg,
+      rgba(255, 245, 157, 0.18) 0%,
+      rgba(249, 168, 37, 0.11) 58%,
+      rgba(255, 255, 255, 0.9) 100%
+    );
+  --flower-header-bg: linear-gradient(
+    to right,
+    rgba(254, 252, 191, 0.9),
+    rgba(253, 230, 138, 0.72),
+    rgba(255, 255, 255, 0.82)
+  );
+  --flower-body-bg: linear-gradient(
+    to bottom,
+    rgba(254, 252, 191, 0.32),
+    rgba(255, 255, 255, 0.48),
+    rgba(253, 230, 138, 0.24)
+  );
+  --flower-advanced-bg: linear-gradient(
+    to bottom right,
+    rgba(254, 252, 191, 0.48),
+    rgba(253, 230, 138, 0.42)
+  );
+  --flower-footer-bg: linear-gradient(
+    to bottom,
+    rgba(253, 230, 138, 0.34),
+    rgba(254, 252, 191, 0.42)
+  );
+  --flower-card-bg: linear-gradient(
+    to bottom right,
+    rgba(254, 252, 191, 0.52),
+    rgba(255, 255, 255, 0.9)
+  );
+  --flower-chip-bg: rgba(255, 250, 200, 0.84);
+  --flower-border: rgba(245, 158, 11, 0.42);
+}
+
+.flower-theme-3 {
+  --flower-panel-bg:
+    radial-gradient(
+      circle at 12% 9%,
+      rgba(239, 154, 154, 0.3) 0%,
+      rgba(255, 255, 255, 0.95) 36%
+    ),
+    radial-gradient(
+      circle at 88% 12%,
+      rgba(198, 40, 40, 0.14) 0%,
+      rgba(255, 255, 255, 0.93) 40%
+    ),
+    linear-gradient(
+      160deg,
+      rgba(239, 154, 154, 0.15) 0%,
+      rgba(198, 40, 40, 0.1) 60%,
+      rgba(255, 255, 255, 0.9) 100%
+    );
+  --flower-header-bg: linear-gradient(
+    to right,
+    rgba(254, 226, 226, 0.9),
+    rgba(252, 165, 165, 0.7),
+    rgba(255, 255, 255, 0.82)
+  );
+  --flower-body-bg: linear-gradient(
+    to bottom,
+    rgba(254, 226, 226, 0.32),
+    rgba(255, 255, 255, 0.48),
+    rgba(252, 165, 165, 0.24)
+  );
+  --flower-advanced-bg: linear-gradient(
+    to bottom right,
+    rgba(254, 226, 226, 0.48),
+    rgba(252, 165, 165, 0.42)
+  );
+  --flower-footer-bg: linear-gradient(
+    to bottom,
+    rgba(252, 165, 165, 0.34),
+    rgba(254, 226, 226, 0.42)
+  );
+  --flower-card-bg: linear-gradient(
+    to bottom right,
+    rgba(254, 226, 226, 0.52),
+    rgba(255, 255, 255, 0.9)
+  );
+  --flower-chip-bg: rgba(255, 236, 236, 0.84);
+  --flower-border: rgba(239, 68, 68, 0.42);
+}
+
+.flower-theme-4 {
+  --flower-panel-bg:
+    radial-gradient(
+      circle at 15% 8%,
+      rgba(244, 143, 177, 0.28) 0%,
+      rgba(255, 255, 255, 0.95) 35%
+    ),
+    radial-gradient(
+      circle at 84% 14%,
+      rgba(216, 27, 96, 0.14) 0%,
+      rgba(255, 255, 255, 0.94) 42%
+    ),
+    linear-gradient(
+      166deg,
+      rgba(244, 143, 177, 0.14) 0%,
+      rgba(216, 27, 96, 0.1) 58%,
+      rgba(255, 255, 255, 0.9) 100%
+    );
+  --flower-header-bg: linear-gradient(
+    to right,
+    rgba(252, 231, 243, 0.9),
+    rgba(244, 114, 182, 0.68),
+    rgba(255, 255, 255, 0.82)
+  );
+  --flower-body-bg: linear-gradient(
+    to bottom,
+    rgba(252, 231, 243, 0.32),
+    rgba(255, 255, 255, 0.48),
+    rgba(244, 114, 182, 0.24)
+  );
+  --flower-advanced-bg: linear-gradient(
+    to bottom right,
+    rgba(252, 231, 243, 0.48),
+    rgba(244, 114, 182, 0.4)
+  );
+  --flower-footer-bg: linear-gradient(
+    to bottom,
+    rgba(244, 114, 182, 0.34),
+    rgba(252, 231, 243, 0.42)
+  );
+  --flower-card-bg: linear-gradient(
+    to bottom right,
+    rgba(252, 231, 243, 0.52),
+    rgba(255, 255, 255, 0.9)
+  );
+  --flower-chip-bg: rgba(255, 239, 246, 0.84);
+  --flower-border: rgba(236, 72, 153, 0.42);
+}
+
+.flower-theme-5 {
+  --flower-panel-bg:
+    radial-gradient(
+      circle at 16% 8%,
+      rgba(206, 147, 216, 0.28) 0%,
+      rgba(255, 255, 255, 0.95) 35%
+    ),
+    radial-gradient(
+      circle at 84% 12%,
+      rgba(142, 36, 170, 0.14) 0%,
+      rgba(255, 255, 255, 0.94) 42%
+    ),
+    linear-gradient(
+      164deg,
+      rgba(206, 147, 216, 0.15) 0%,
+      rgba(142, 36, 170, 0.1) 58%,
+      rgba(255, 255, 255, 0.9) 100%
+    );
+  --flower-header-bg: linear-gradient(
+    to right,
+    rgba(243, 232, 255, 0.9),
+    rgba(196, 181, 253, 0.72),
+    rgba(255, 255, 255, 0.82)
+  );
+  --flower-body-bg: linear-gradient(
+    to bottom,
+    rgba(243, 232, 255, 0.32),
+    rgba(255, 255, 255, 0.48),
+    rgba(196, 181, 253, 0.24)
+  );
+  --flower-advanced-bg: linear-gradient(
+    to bottom right,
+    rgba(243, 232, 255, 0.48),
+    rgba(196, 181, 253, 0.42)
+  );
+  --flower-footer-bg: linear-gradient(
+    to bottom,
+    rgba(196, 181, 253, 0.34),
+    rgba(243, 232, 255, 0.42)
+  );
+  --flower-card-bg: linear-gradient(
+    to bottom right,
+    rgba(243, 232, 255, 0.52),
+    rgba(255, 255, 255, 0.9)
+  );
+  --flower-chip-bg: rgba(247, 240, 255, 0.84);
+  --flower-border: rgba(168, 85, 247, 0.42);
+}
+
+.flower-theme-6 {
+  --flower-panel-bg:
+    radial-gradient(
+      circle at 16% 8%,
+      rgba(255, 224, 130, 0.3) 0%,
+      rgba(255, 255, 255, 0.95) 35%
+    ),
+    radial-gradient(
+      circle at 84% 12%,
+      rgba(239, 108, 0, 0.15) 0%,
+      rgba(255, 255, 255, 0.94) 42%
+    ),
+    linear-gradient(
+      164deg,
+      rgba(255, 224, 130, 0.15) 0%,
+      rgba(239, 108, 0, 0.11) 58%,
+      rgba(255, 255, 255, 0.9) 100%
+    );
+  --flower-header-bg: linear-gradient(
+    to right,
+    rgba(255, 237, 213, 0.9),
+    rgba(253, 186, 116, 0.72),
+    rgba(255, 255, 255, 0.82)
+  );
+  --flower-body-bg: linear-gradient(
+    to bottom,
+    rgba(255, 237, 213, 0.32),
+    rgba(255, 255, 255, 0.48),
+    rgba(253, 186, 116, 0.24)
+  );
+  --flower-advanced-bg: linear-gradient(
+    to bottom right,
+    rgba(255, 237, 213, 0.48),
+    rgba(253, 186, 116, 0.42)
+  );
+  --flower-footer-bg: linear-gradient(
+    to bottom,
+    rgba(253, 186, 116, 0.34),
+    rgba(255, 237, 213, 0.42)
+  );
+  --flower-card-bg: linear-gradient(
+    to bottom right,
+    rgba(255, 237, 213, 0.52),
+    rgba(255, 255, 255, 0.9)
+  );
+  --flower-chip-bg: rgba(255, 242, 228, 0.84);
+  --flower-border: rgba(249, 115, 22, 0.42);
+}
+
+.flower-theme-7 {
+  --flower-panel-bg:
+    radial-gradient(
+      circle at 16% 8%,
+      rgba(240, 98, 146, 0.28) 0%,
+      rgba(255, 255, 255, 0.95) 35%
+    ),
+    radial-gradient(
+      circle at 84% 14%,
+      rgba(173, 20, 87, 0.15) 0%,
+      rgba(255, 255, 255, 0.94) 42%
+    ),
+    linear-gradient(
+      164deg,
+      rgba(240, 98, 146, 0.14) 0%,
+      rgba(173, 20, 87, 0.11) 58%,
+      rgba(255, 255, 255, 0.9) 100%
+    );
+  --flower-header-bg: linear-gradient(
+    to right,
+    rgba(255, 228, 230, 0.9),
+    rgba(251, 113, 133, 0.72),
+    rgba(255, 255, 255, 0.82)
+  );
+  --flower-body-bg: linear-gradient(
+    to bottom,
+    rgba(255, 228, 230, 0.32),
+    rgba(255, 255, 255, 0.48),
+    rgba(251, 113, 133, 0.24)
+  );
+  --flower-advanced-bg: linear-gradient(
+    to bottom right,
+    rgba(255, 228, 230, 0.48),
+    rgba(251, 113, 133, 0.42)
+  );
+  --flower-footer-bg: linear-gradient(
+    to bottom,
+    rgba(251, 113, 133, 0.34),
+    rgba(255, 228, 230, 0.42)
+  );
+  --flower-card-bg: linear-gradient(
+    to bottom right,
+    rgba(255, 228, 230, 0.52),
+    rgba(255, 255, 255, 0.9)
+  );
+  --flower-chip-bg: rgba(255, 238, 241, 0.84);
+  --flower-border: rgba(225, 29, 72, 0.42);
+}
+
+.flower-theme-8 {
+  --flower-panel-bg:
+    radial-gradient(
+      circle at 16% 8%,
+      rgba(179, 157, 219, 0.3) 0%,
+      rgba(255, 255, 255, 0.95) 35%
+    ),
+    radial-gradient(
+      circle at 84% 14%,
+      rgba(94, 53, 177, 0.15) 0%,
+      rgba(255, 255, 255, 0.94) 42%
+    ),
+    linear-gradient(
+      164deg,
+      rgba(179, 157, 219, 0.16) 0%,
+      rgba(94, 53, 177, 0.11) 58%,
+      rgba(255, 255, 255, 0.9) 100%
+    );
+  --flower-header-bg: linear-gradient(
+    to right,
+    rgba(224, 231, 255, 0.9),
+    rgba(165, 180, 252, 0.72),
+    rgba(255, 255, 255, 0.82)
+  );
+  --flower-body-bg: linear-gradient(
+    to bottom,
+    rgba(224, 231, 255, 0.32),
+    rgba(255, 255, 255, 0.48),
+    rgba(165, 180, 252, 0.24)
+  );
+  --flower-advanced-bg: linear-gradient(
+    to bottom right,
+    rgba(224, 231, 255, 0.48),
+    rgba(165, 180, 252, 0.42)
+  );
+  --flower-footer-bg: linear-gradient(
+    to bottom,
+    rgba(165, 180, 252, 0.34),
+    rgba(224, 231, 255, 0.42)
+  );
+  --flower-card-bg: linear-gradient(
+    to bottom right,
+    rgba(224, 231, 255, 0.52),
+    rgba(255, 255, 255, 0.9)
+  );
+  --flower-chip-bg: rgba(237, 242, 255, 0.84);
+  --flower-border: rgba(99, 102, 241, 0.42);
+}
+
+.flower-theme-9 {
+  --flower-panel-bg:
+    radial-gradient(
+      circle at 16% 8%,
+      rgba(224, 242, 241, 0.35) 0%,
+      rgba(255, 255, 255, 0.95) 35%
+    ),
+    radial-gradient(
+      circle at 84% 14%,
+      rgba(38, 166, 154, 0.15) 0%,
+      rgba(255, 255, 255, 0.94) 42%
+    ),
+    linear-gradient(
+      164deg,
+      rgba(224, 242, 241, 0.18) 0%,
+      rgba(38, 166, 154, 0.1) 58%,
+      rgba(255, 255, 255, 0.9) 100%
+    );
+  --flower-header-bg: linear-gradient(
+    to right,
+    rgba(204, 251, 241, 0.9),
+    rgba(110, 231, 183, 0.72),
+    rgba(255, 255, 255, 0.82)
+  );
+  --flower-body-bg: linear-gradient(
+    to bottom,
+    rgba(204, 251, 241, 0.32),
+    rgba(255, 255, 255, 0.48),
+    rgba(110, 231, 183, 0.24)
+  );
+  --flower-advanced-bg: linear-gradient(
+    to bottom right,
+    rgba(204, 251, 241, 0.48),
+    rgba(110, 231, 183, 0.42)
+  );
+  --flower-footer-bg: linear-gradient(
+    to bottom,
+    rgba(110, 231, 183, 0.34),
+    rgba(204, 251, 241, 0.42)
+  );
+  --flower-card-bg: linear-gradient(
+    to bottom right,
+    rgba(204, 251, 241, 0.52),
+    rgba(255, 255, 255, 0.9)
+  );
+  --flower-chip-bg: rgba(229, 255, 249, 0.84);
+  --flower-border: rgba(20, 184, 166, 0.42);
+}
+
+.flower-theme-10 {
+  --flower-panel-bg:
+    radial-gradient(
+      circle at 16% 8%,
+      rgba(255, 241, 118, 0.3) 0%,
+      rgba(255, 255, 255, 0.95) 35%
+    ),
+    radial-gradient(
+      circle at 84% 14%,
+      rgba(255, 143, 0, 0.15) 0%,
+      rgba(255, 255, 255, 0.94) 42%
+    ),
+    linear-gradient(
+      164deg,
+      rgba(255, 241, 118, 0.17) 0%,
+      rgba(255, 143, 0, 0.1) 58%,
+      rgba(255, 255, 255, 0.9) 100%
+    );
+  --flower-header-bg: linear-gradient(
+    to right,
+    rgba(254, 249, 195, 0.9),
+    rgba(253, 224, 71, 0.72),
+    rgba(255, 255, 255, 0.82)
+  );
+  --flower-body-bg: linear-gradient(
+    to bottom,
+    rgba(254, 249, 195, 0.32),
+    rgba(255, 255, 255, 0.48),
+    rgba(253, 224, 71, 0.24)
+  );
+  --flower-advanced-bg: linear-gradient(
+    to bottom right,
+    rgba(254, 249, 195, 0.48),
+    rgba(253, 224, 71, 0.42)
+  );
+  --flower-footer-bg: linear-gradient(
+    to bottom,
+    rgba(253, 224, 71, 0.34),
+    rgba(254, 249, 195, 0.42)
+  );
+  --flower-card-bg: linear-gradient(
+    to bottom right,
+    rgba(254, 249, 195, 0.52),
+    rgba(255, 255, 255, 0.9)
+  );
+  --flower-chip-bg: rgba(255, 250, 214, 0.84);
+  --flower-border: rgba(234, 179, 8, 0.42);
+}
+
+.memory-flower-panel {
+  background: var(--flower-panel-bg);
+}
+
+.memory-flower-header {
+  border-color: var(--flower-border);
+  background: var(--flower-header-bg);
+}
+
+.memory-flower-body {
+  background: var(--flower-body-bg);
+}
+
+.memory-flower-advanced {
+  border-color: var(--flower-border);
+  background: var(--flower-advanced-bg);
+}
+
+.memory-flower-footer {
+  border-color: var(--flower-border);
+  background: var(--flower-footer-bg);
+}
+
+.memory-flower-card {
+  border-color: var(--flower-border);
+  background: var(--flower-card-bg);
+}
+
+.memory-flower-chip {
+  border-color: var(--flower-border);
+  background: var(--flower-chip-bg);
+}
+
+.memory-flower-action {
+  border-color: var(--flower-border);
+  background: var(--flower-chip-bg);
+}
+
+.memory-flower-icon {
+  display: inline-flex;
+  transform-origin: center;
+}
+
+.flower-icon-motion-1 {
+  animation: flowerIconBloom1 3.8s ease-in-out infinite;
+}
+
+.flower-icon-motion-2 {
+  animation: flowerIconBloom2 3.1s ease-in-out infinite;
+}
+
+.flower-icon-motion-3 {
+  animation: flowerIconBloom3 4s ease-in-out infinite;
+}
+
+.flower-icon-motion-4 {
+  animation: flowerIconBloom4 3.6s ease-in-out infinite;
+}
+
+.flower-icon-motion-5 {
+  animation: flowerIconBloom5 2.9s ease-in-out infinite;
+}
+
+.flower-icon-motion-6 {
+  animation: flowerIconBloom6 3.4s ease-in-out infinite;
+}
+
+.flower-icon-motion-7 {
+  animation: flowerIconBloom7 3.3s ease-in-out infinite;
+}
+
+.flower-icon-motion-8 {
+  animation: flowerIconBloom8 4.2s ease-in-out infinite;
+}
+
+.flower-icon-motion-9 {
+  animation: flowerIconBloom9 3.7s ease-in-out infinite;
+}
+
+.flower-icon-motion-10 {
+  animation: flowerIconBloom10 3.5s ease-in-out infinite;
+}
+
+@keyframes flowerIconBloom1 {
+  0%,
+  100% {
+    transform: scale(1) rotate(-2deg);
+  }
+  50% {
+    transform: scale(1.14) rotate(4deg);
+  }
+}
+
+@keyframes flowerIconBloom2 {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.12);
+  }
+}
+
+@keyframes flowerIconBloom3 {
+  0%,
+  100% {
+    transform: scale(0.96) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.15) rotate(-5deg);
+  }
+}
+
+@keyframes flowerIconBloom4 {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  40% {
+    transform: rotate(7deg) scale(1.1);
+  }
+  70% {
+    transform: rotate(-5deg) scale(1.06);
+  }
+}
+
+@keyframes flowerIconBloom5 {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.92;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+}
+
+@keyframes flowerIconBloom6 {
+  0%,
+  100% {
+    transform: translateX(0) scale(1);
+  }
+  50% {
+    transform: translateX(1px) translateY(-2px) scale(1.12);
+  }
+}
+
+@keyframes flowerIconBloom7 {
+  0%,
+  100% {
+    transform: rotate(-3deg) scale(0.98);
+  }
+  50% {
+    transform: rotate(5deg) scale(1.14);
+  }
+}
+
+@keyframes flowerIconBloom8 {
+  0%,
+  100% {
+    transform: scale(0.95) translateY(0);
+  }
+  45% {
+    transform: scale(1.16) translateY(-2px);
+  }
+}
+
+@keyframes flowerIconBloom9 {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  30% {
+    transform: rotate(-6deg) scale(1.08);
+  }
+  60% {
+    transform: rotate(5deg) scale(1.14);
+  }
+}
+
+@keyframes flowerIconBloom10 {
+  0%,
+  100% {
+    transform: scale(1) translateY(0);
+  }
+  50% {
+    transform: scale(1.16) translateY(-1px) rotate(4deg);
+  }
+}

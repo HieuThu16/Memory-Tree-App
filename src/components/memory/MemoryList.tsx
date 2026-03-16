@@ -8,6 +8,7 @@ import { deleteMemory } from "@/lib/actions";
 import { useMemoryStore } from "@/lib/stores/memoryStore";
 import { useUiStore } from "@/lib/stores/uiStore";
 import { useTransition } from "react";
+import { flowerConceptFromMemory, getFlowerThemeClass } from "./flowerConcept";
 
 export default function MemoryList({
   memories,
@@ -48,9 +49,7 @@ export default function MemoryList({
         transition={animated ? { duration: 0.24 } : undefined}
       >
         <div className="text-4xl">🌱</div>
-        <h3 className="mt-3 text-base text-foreground">
-          Chưa có kỉ niệm nào
-        </h3>
+        <h3 className="mt-3 text-base text-foreground">Chưa có kỉ niệm nào</h3>
         <button
           type="button"
           onClick={() => openCreate()}
@@ -64,11 +63,13 @@ export default function MemoryList({
 
   return (
     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {memories.map((memory, index) => (
-        <div key={memory.id} className="relative group">
+      {memories.map((memory) => (
+        <div
+          key={memory.id}
+          className={`group relative ${getFlowerThemeClass(flowerConceptFromMemory(memory))}`}
+        >
           <MemoryCard
             memory={memory}
-            index={index}
             onSelect={onSelect}
             participant={participantsByUserId?.get(memory.user_id)}
             animated={animated}
@@ -80,7 +81,7 @@ export default function MemoryList({
                 e.stopPropagation();
                 setEditingMemory(memory);
               }}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 border border-border shadow-sm text-text-secondary hover:text-accent hover:border-accent"
+              className="memory-flower-action flex h-8 w-8 items-center justify-center rounded-full border text-text-secondary shadow-sm hover:text-accent hover:border-accent"
               title="Sửa"
             >
               ✏️
@@ -91,7 +92,7 @@ export default function MemoryList({
                 handleDelete(memory.id);
               }}
               disabled={isDeleting}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 border border-border shadow-sm text-text-secondary hover:text-rose hover:border-rose disabled:opacity-50"
+              className="memory-flower-action flex h-8 w-8 items-center justify-center rounded-full border text-text-secondary shadow-sm hover:text-rose hover:border-rose disabled:opacity-50"
               title="Xóa"
             >
               🗑️
