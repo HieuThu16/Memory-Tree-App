@@ -9,7 +9,23 @@ import BackButton from "@/components/ui/BackButton";
 const COUNTDOWN_SELECT =
   "id, room_id, added_by, title, description, target_date, emoji, is_passed, created_at, updated_at";
 
-const EMOJI_OPTIONS = ["🎯", "❤️", "🎂", "✈️", "🎓", "💍", "🏠", "🎄", "🌸", "🎉", "🎵", "🏖️", "📅", "⭐", "🌈"];
+const EMOJI_OPTIONS = [
+  "🎯",
+  "❤️",
+  "🎂",
+  "✈️",
+  "🎓",
+  "💍",
+  "🏠",
+  "🎄",
+  "🌸",
+  "🎉",
+  "🎵",
+  "🏖️",
+  "📅",
+  "⭐",
+  "🌈",
+];
 
 type Props = {
   roomId: string;
@@ -27,7 +43,14 @@ function computeCountdown(targetDate: string) {
     // Already passed
     const pastMs = Math.abs(diffMs);
     const pastDays = Math.floor(pastMs / (1000 * 60 * 60 * 24));
-    return { isPast: true, days: pastDays, hours: 0, minutes: 0, seconds: 0, totalMs: pastMs };
+    return {
+      isPast: true,
+      days: pastDays,
+      hours: 0,
+      minutes: 0,
+      seconds: 0,
+      totalMs: pastMs,
+    };
   }
 
   const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -39,7 +62,9 @@ function computeCountdown(targetDate: string) {
 }
 
 function CountdownTimer({ targetDate }: { targetDate: string }) {
-  const [countdown, setCountdown] = useState(() => computeCountdown(targetDate));
+  const [countdown, setCountdown] = useState(() =>
+    computeCountdown(targetDate),
+  );
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -51,7 +76,9 @@ function CountdownTimer({ targetDate }: { targetDate: string }) {
   if (countdown.isPast) {
     return (
       <div className="flex items-center gap-1.5 text-rose-500">
-        <span className="text-xs font-medium">Đã qua {countdown.days} ngày trước</span>
+        <span className="text-xs font-medium">
+          Đã qua {countdown.days} ngày trước
+        </span>
       </div>
     );
   }
@@ -75,7 +102,9 @@ function TimeUnit({ value, label }: { value: number; label: string }) {
       <span className="inline-flex min-w-[32px] items-center justify-center rounded-lg bg-gradient-to-b from-accent/10 to-accent/5 px-1.5 py-1 text-base font-bold tabular-nums text-accent">
         {String(value).padStart(2, "0")}
       </span>
-      <span className="mt-0.5 text-[8px] font-medium uppercase tracking-wider text-text-muted">{label}</span>
+      <span className="mt-0.5 text-[8px] font-medium uppercase tracking-wider text-text-muted">
+        {label}
+      </span>
     </div>
   );
 }
@@ -99,7 +128,8 @@ export default function RoomCountdownBoard({
   participantsByUserId,
 }: Props) {
   const addToast = useUiStore((state) => state.addToast);
-  const [countdowns, setCountdowns] = useState<RoomCountdownRecord[]>(initialCountdowns);
+  const [countdowns, setCountdowns] =
+    useState<RoomCountdownRecord[]>(initialCountdowns);
   const [isPending, startTransition] = useTransition();
 
   // Form state
@@ -139,9 +169,14 @@ export default function RoomCountdownBoard({
         (payload) => {
           const inserted = payload.new as RoomCountdownRecord;
           setCountdowns((prev) => {
-            const next = [inserted, ...prev.filter((c) => c.id !== inserted.id)];
+            const next = [
+              inserted,
+              ...prev.filter((c) => c.id !== inserted.id),
+            ];
             return next.sort(
-              (a, b) => new Date(a.target_date).getTime() - new Date(b.target_date).getTime(),
+              (a, b) =>
+                new Date(a.target_date).getTime() -
+                new Date(b.target_date).getTime(),
             );
           });
         },
@@ -190,10 +225,14 @@ export default function RoomCountdownBoard({
   const filteredCountdowns = useMemo(() => {
     const now = new Date();
     if (filter === "upcoming") {
-      return countdowns.filter((c) => new Date(c.target_date).getTime() > now.getTime());
+      return countdowns.filter(
+        (c) => new Date(c.target_date).getTime() > now.getTime(),
+      );
     }
     if (filter === "passed") {
-      return countdowns.filter((c) => new Date(c.target_date).getTime() <= now.getTime());
+      return countdowns.filter(
+        (c) => new Date(c.target_date).getTime() <= now.getTime(),
+      );
     }
     return countdowns;
   }, [filter, countdowns]);
@@ -247,7 +286,9 @@ export default function RoomCountdownBoard({
       setCountdowns((prev) => {
         const next = [data as RoomCountdownRecord, ...prev];
         return next.sort(
-          (a, b) => new Date(a.target_date).getTime() - new Date(b.target_date).getTime(),
+          (a, b) =>
+            new Date(a.target_date).getTime() -
+            new Date(b.target_date).getTime(),
         );
       });
 
@@ -266,6 +307,15 @@ export default function RoomCountdownBoard({
       addToast("Tên sự kiện không được để trống.", "error");
       return;
     }
+    if (!editTargetDate) {
+      addToast("Vui lòng chọn ngày mục tiêu.", "error");
+      return;
+    }
+    const parsedDate = new Date(editTargetDate);
+    if (isNaN(parsedDate.getTime())) {
+      addToast("Ngày mục tiêu không hợp lệ.", "error");
+      return;
+    }
 
     startTransition(async () => {
       const supabase = createSupabaseBrowserClient();
@@ -274,7 +324,7 @@ export default function RoomCountdownBoard({
         .update({
           title: editTitle.trim(),
           description: editDescription.trim() || null,
-          target_date: new Date(editTargetDate).toISOString(),
+          target_date: parsedDate.toISOString(),
           emoji: editEmoji,
           updated_at: new Date().toISOString(),
         })
@@ -290,7 +340,9 @@ export default function RoomCountdownBoard({
 
       if (data) {
         setCountdowns((prev) =>
-          prev.map((c) => (c.id === data.id ? (data as RoomCountdownRecord) : c)),
+          prev.map((c) =>
+            c.id === data.id ? (data as RoomCountdownRecord) : c,
+          ),
         );
       }
 
@@ -325,7 +377,10 @@ export default function RoomCountdownBoard({
     const now = new Date().getTime();
     const upcoming = countdowns
       .filter((c) => new Date(c.target_date).getTime() > now)
-      .sort((a, b) => new Date(a.target_date).getTime() - new Date(b.target_date).getTime());
+      .sort(
+        (a, b) =>
+          new Date(a.target_date).getTime() - new Date(b.target_date).getTime(),
+      );
     return upcoming[0] ?? null;
   }, [countdowns]);
 
@@ -340,12 +395,18 @@ export default function RoomCountdownBoard({
       {/* Hero countdown card */}
       {nextUpcoming && (
         <div className="relative overflow-hidden rounded-2xl border border-accent/20 bg-gradient-to-br from-accent/5 via-white to-pink-50/50 p-4 shadow-[0_4px_20px_-8px_rgba(108,76,215,0.2)]">
-          <div className="absolute right-3 top-3 text-4xl opacity-20">{nextUpcoming.emoji}</div>
+          <div className="absolute right-3 top-3 text-4xl opacity-20">
+            {nextUpcoming.emoji}
+          </div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-accent">
             ⏰ Sự kiện tiếp theo
           </p>
-          <h3 className="mt-1.5 text-base font-semibold text-foreground">{nextUpcoming.emoji} {nextUpcoming.title}</h3>
-          <p className="mt-0.5 text-[11px] text-text-muted">{formatDate(nextUpcoming.target_date)}</p>
+          <h3 className="mt-1.5 text-base font-semibold text-foreground">
+            {nextUpcoming.emoji} {nextUpcoming.title}
+          </h3>
+          <p className="mt-0.5 text-[11px] text-text-muted">
+            {formatDate(nextUpcoming.target_date)}
+          </p>
           <div className="mt-3">
             <CountdownTimer targetDate={nextUpcoming.target_date} />
           </div>
@@ -407,7 +468,9 @@ export default function RoomCountdownBoard({
                 className="input-field resize-none !rounded-xl !py-2.5 text-sm"
               />
               <div>
-                <p className="text-[10px] text-text-muted mb-1.5 font-medium">Chọn biểu tượng:</p>
+                <p className="text-[10px] text-text-muted mb-1.5 font-medium">
+                  Chọn biểu tượng:
+                </p>
                 <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-1">
                   {EMOJI_OPTIONS.map((e) => (
                     <button
@@ -453,7 +516,11 @@ export default function RoomCountdownBoard({
                     : "text-text-secondary hover:bg-white/70"
                 }`}
               >
-                {f === "all" ? "Tất cả" : f === "upcoming" ? "Sắp tới" : "Đã qua"}
+                {f === "all"
+                  ? "Tất cả"
+                  : f === "upcoming"
+                    ? "Sắp tới"
+                    : "Đã qua"}
               </button>
             ))}
           </div>
@@ -480,7 +547,9 @@ export default function RoomCountdownBoard({
                     <div className="flex items-start gap-2 min-w-0">
                       <span className="mt-0.5 text-xl">{countdown.emoji}</span>
                       <div className="min-w-0">
-                        <p className={`text-sm font-semibold ${cd.isPast ? "text-text-muted line-through" : "text-foreground"}`}>
+                        <p
+                          className={`text-sm font-semibold ${cd.isPast ? "text-text-muted line-through" : "text-foreground"}`}
+                        >
                           {countdown.title}
                         </p>
                         <p className="mt-0.5 text-[11px] text-text-muted">
@@ -488,7 +557,8 @@ export default function RoomCountdownBoard({
                         </p>
                         {!cd.isPast ? (
                           <p className="mt-1 text-xs font-medium text-accent">
-                            Còn {cd.days > 0 ? `${cd.days} ngày ` : ""}{cd.hours}h {cd.minutes}m
+                            Còn {cd.days > 0 ? `${cd.days} ngày ` : ""}
+                            {cd.hours}h {cd.minutes}m
                           </p>
                         ) : (
                           <p className="mt-1 text-[11px] text-rose-400">
@@ -533,8 +603,12 @@ export default function RoomCountdownBoard({
               {/* Hero countdown in detail */}
               <div className="rounded-2xl border border-accent/20 bg-gradient-to-br from-accent/5 via-white to-pink-50/50 p-4 text-center">
                 <p className="text-4xl">{selectedCountdown.emoji}</p>
-                <h3 className="mt-2 text-lg font-semibold text-foreground">{selectedCountdown.title}</h3>
-                <p className="mt-1 text-xs text-text-muted">{formatDate(selectedCountdown.target_date)}</p>
+                <h3 className="mt-2 text-lg font-semibold text-foreground">
+                  {selectedCountdown.title}
+                </h3>
+                <p className="mt-1 text-xs text-text-muted">
+                  {formatDate(selectedCountdown.target_date)}
+                </p>
                 <div className="mt-3 flex justify-center">
                   <CountdownTimer targetDate={selectedCountdown.target_date} />
                 </div>
@@ -604,7 +678,9 @@ export default function RoomCountdownBoard({
 
               <div className="rounded-2xl border border-border bg-white/85 p-3 text-xs text-text-secondary">
                 <p>Người thêm: {getDisplayName(selectedCountdown.added_by)}</p>
-                <p>Thời gian thêm: {formatDate(selectedCountdown.created_at)}</p>
+                <p>
+                  Thời gian thêm: {formatDate(selectedCountdown.created_at)}
+                </p>
               </div>
 
               <div className="flex gap-2 pb-2">

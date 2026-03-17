@@ -9,7 +9,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
 
   return (
-    <div className="relative min-h-dvh pb-28">
+    <div className="relative min-h-dvh pb-40">
       <EffectsLayer />
       <AppHeader user={user} />
       {children}

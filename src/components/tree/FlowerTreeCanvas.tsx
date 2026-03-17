@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import type { MemoryRecord } from "@/lib/types";
 import {
   FLOWER_COMPONENTS,
@@ -45,15 +46,15 @@ const SEASONS: SeasonDef[] = [
     bg: "#f3fbf8",
     fill: "#bde8d6",
     circles: [
-      [124, 90, 78],
-      [92, 70, 42],
-      [164, 70, 44],
-      [122, 132, 44],
-      [168, 110, 38],
-      [84, 108, 34],
-      [150, 98, 34],
-      [108, 44, 30],
-      [150, 44, 28],
+      [124, 90, 110],
+      [92, 70, 65],
+      [164, 70, 68],
+      [122, 132, 68],
+      [168, 110, 62],
+      [84, 108, 55],
+      [150, 98, 55],
+      [108, 44, 48],
+      [150, 44, 45],
     ],
   },
   {
@@ -65,15 +66,15 @@ const SEASONS: SeasonDef[] = [
     bg: "#f4f9fe",
     fill: "#c7e2f6",
     circles: [
-      [236, 96, 80],
-      [196, 72, 42],
-      [276, 74, 42],
-      [252, 138, 44],
-      [296, 108, 36],
-      [208, 124, 34],
-      [244, 100, 36],
-      [220, 48, 30],
-      [260, 50, 28],
+      [236, 96, 112],
+      [196, 72, 65],
+      [276, 74, 65],
+      [252, 138, 68],
+      [296, 108, 60],
+      [208, 124, 55],
+      [244, 100, 58],
+      [220, 48, 48],
+      [260, 50, 45],
     ],
   },
   {
@@ -85,15 +86,15 @@ const SEASONS: SeasonDef[] = [
     bg: "#fff8f5",
     fill: "#f5d7ca",
     circles: [
-      [122, 176, 76],
-      [84, 150, 40],
-      [166, 152, 40],
-      [120, 220, 42],
-      [170, 194, 34],
-      [80, 194, 34],
-      [138, 176, 34],
-      [106, 130, 28],
-      [146, 132, 28],
+      [122, 176, 108],
+      [84, 150, 62],
+      [166, 152, 62],
+      [120, 220, 65],
+      [170, 194, 55],
+      [80, 194, 55],
+      [138, 176, 55],
+      [106, 130, 45],
+      [146, 132, 45],
     ],
   },
   {
@@ -105,15 +106,15 @@ const SEASONS: SeasonDef[] = [
     bg: "#faf7ff",
     fill: "#dfd4f5",
     circles: [
-      [236, 182, 74],
-      [198, 154, 40],
-      [274, 156, 40],
-      [232, 224, 42],
-      [278, 194, 34],
-      [194, 196, 34],
-      [248, 178, 34],
-      [214, 128, 28],
-      [252, 130, 28],
+      [236, 182, 106],
+      [198, 154, 62],
+      [274, 156, 62],
+      [232, 224, 65],
+      [278, 194, 55],
+      [194, 196, 55],
+      [248, 178, 55],
+      [214, 128, 45],
+      [252, 130, 45],
     ],
   },
 ];
@@ -202,7 +203,7 @@ function ConceptGlyph({
   const safe = normalizeFlowerConcept(concept);
   return (
     <g className={`flower-glyph flower-glyph-${safe} ${delayClass}`}>
-      <g transform={`translate(${x + 12},${y - 10})`}>
+      <g transform={`translate(${x + 8},${y - 8})`}>
         {safe === 1 ? (
           <>
             <ellipse cx="0" cy="-2" rx="2.6" ry="1.5" fill={c1} opacity="0.7" />
@@ -379,7 +380,7 @@ function YearTreeSvg({
     <svg
       ref={registerExportSvg}
       width="100%"
-      viewBox="0 0 360 336"
+      viewBox="0 0 360 420"
       preserveAspectRatio="xMidYMid meet"
       className="block h-auto w-full"
     >
@@ -450,12 +451,17 @@ function YearTreeSvg({
         </filter>
       </defs>
 
-      <ellipse cx="180" cy="330" rx="62" ry="6" fill="rgba(0,0,0,.08)" />
+      {/* Ground shadow */}
+      <ellipse cx="180" cy="406" rx="78" ry="8" fill="rgba(0,0,0,.08)" />
+
+      {/* Extended roots */}
       {[
-        [180, 326, 138, 332],
-        [180, 326, 222, 332],
-        [180, 326, 154, 328],
-        [180, 326, 206, 328],
+        [180, 382, 112, 402],
+        [180, 382, 248, 402],
+        [180, 382, 146, 394],
+        [180, 382, 214, 394],
+        [180, 382, 166, 408],
+        [180, 382, 194, 408],
       ].map(([x1, y1, x2, y2], idx) => (
         <line
           key={`root-${idx}`}
@@ -464,30 +470,37 @@ function YearTreeSvg({
           x2={x2}
           y2={y2}
           stroke="#5d3012"
-          strokeWidth={idx < 2 ? 4 : 2.5}
+          strokeWidth={idx < 2 ? 5 : idx < 4 ? 3.5 : 2.5}
           strokeLinecap="round"
           opacity="0.65"
         />
       ))}
 
+      {/* Trunk */}
       <path
-        d="M156,326 C150,304 152,276 160,248 C167,224 175,212 180,200 C186,212 194,224 200,248 C208,276 210,304 204,326 Z"
+        d="M154,382 C148,348 150,306 160,266 C168,236 176,216 180,200 C185,216 193,236 200,266 C210,306 212,348 206,382 Z"
         fill="url(#treeTrunkGradient)"
         opacity="0.97"
       />
       <path
-        d="M180,326 C178,304 181,279 184,252 C187,228 182,213 180,200"
+        d="M180,382 C178,348 181,312 184,272 C187,240 182,220 180,200"
         stroke="rgba(255,255,255,.1)"
         strokeWidth="4"
         fill="none"
         strokeLinecap="round"
       />
 
-      <g stroke="rgba(90,58,31,.5)" strokeWidth="3.6" fill="none" strokeLinecap="round">
-        <path d="M180,206 C162,182 142,162 126,148" />
-        <path d="M180,206 C198,182 220,164 236,148" />
-        <path d="M180,214 C164,200 142,188 116,184" />
-        <path d="M180,214 C196,198 218,190 246,182" />
+      {/* Branches */}
+      <g
+        stroke="rgba(90,58,31,.5)"
+        strokeWidth="3.6"
+        fill="none"
+        strokeLinecap="round"
+      >
+        <path d="M180,206 C160,178 136,158 116,146" />
+        <path d="M180,206 C200,178 224,160 244,146" />
+        <path d="M180,216 C162,198 136,186 106,184" />
+        <path d="M180,216 C198,198 224,188 254,184" />
       </g>
 
       {[4, 3, 2, 1].map((id) => {
@@ -496,10 +509,10 @@ function YearTreeSvg({
       })}
 
       <g filter="url(#mb-bridge)">
-        <circle cx="178" cy="134" r="56" fill="url(#fgBridge)" opacity="0.9" />
-        <circle cx="176" cy="176" r="48" fill="url(#fgBridge)" opacity="0.86" />
-        <circle cx="220" cy="156" r="38" fill="url(#fgBridge)" opacity="0.82" />
-        <circle cx="136" cy="158" r="36" fill="url(#fgBridge)" opacity="0.82" />
+        <circle cx="178" cy="138" r="68" fill="url(#fgBridge)" opacity="0.9" />
+        <circle cx="176" cy="186" r="58" fill="url(#fgBridge)" opacity="0.86" />
+        <circle cx="230" cy="164" r="46" fill="url(#fgBridge)" opacity="0.82" />
+        <circle cx="126" cy="166" r="44" fill="url(#fgBridge)" opacity="0.82" />
       </g>
 
       {MONTH_NODES.map((monthNode, monthIndex) => {
@@ -583,7 +596,8 @@ function MonthMemorySvg({
   const season = getMonthSeason(month);
   const cx = 150;
   const cy = 96;
-  const circleSlots = Math.min(14, Math.max(6, memories.length));
+  const circlesCount = memories.length;
+  const circleSlots = Math.min(12, Math.max(6, circlesCount));
 
   return (
     <svg
@@ -598,12 +612,12 @@ function MonthMemorySvg({
                   opacity: 0;
                   transform-box: fill-box;
                   transform-origin: center;
-                  animation: memoryEnter .46s cubic-bezier(.2,.84,.24,1) forwards;
+                  animation: memoryEnter .7s cubic-bezier(.34, 1.56, .64, 1) forwards;
                 }
                 @keyframes memoryEnter {
-                  0% { opacity: 0; transform: translateY(8px) scale(.72); }
-                  70% { opacity: 1; transform: translateY(-2px) scale(1.04); }
-                  100% { opacity: 1; transform: translateY(0) scale(1); }
+                  0% { opacity: 0; transform: scale(0) rotate(-25deg); filter: blur(6px); }
+                  60% { opacity: 1; transform: scale(1.15) rotate(5deg); filter: blur(0px); }
+                  100% { opacity: 1; transform: scale(1) rotate(0deg); }
                 }
         .flower-core, .flower-bloom, .flower-drift, .flower-glyph {
           transform-box: fill-box;
@@ -732,12 +746,12 @@ function MonthMemorySvg({
       `}</style>
 
       <defs>
-        <filter id="mb-month" x="-40%" y="-40%" width="180%" height="180%">
-          <feGaussianBlur stdDeviation="8" result="blur" />
+        <filter id="mb-month" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="15" result="blur" />
           <feColorMatrix
             in="blur"
             type="matrix"
-            values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -9"
+            values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -8"
           />
         </filter>
         <linearGradient id="monthTrunkGradient" x1="0" y1="0" x2="1" y2="0">
@@ -780,16 +794,16 @@ function MonthMemorySvg({
 
       <g filter="url(#mb-month)">
         {[
-          [150, 95, 52],
-          [124, 70, 27],
-          [176, 68, 25],
-          [190, 95, 24],
-          [182, 120, 20],
-          [120, 118, 21],
-          [96, 96, 21],
-          [150, 48, 19],
-          [134, 49, 16],
-          [166, 50, 15],
+          [150, 95, 82],
+          [124, 70, 52],
+          [176, 68, 48],
+          [190, 95, 42],
+          [182, 120, 38],
+          [120, 118, 40],
+          [96, 96, 38],
+          [150, 48, 35],
+          [134, 49, 28],
+          [166, 50, 28],
         ].map(([bx, by, br], idx) => (
           <circle
             key={`blob-${idx}`}
@@ -804,8 +818,11 @@ function MonthMemorySvg({
       {memories.map((memory, index) => {
         const ring = Math.floor(index / circleSlots);
         const slot = index % circleSlots;
-        const angle = (slot * 2 * Math.PI) / circleSlots - Math.PI / 2;
-        const radius = 34 + ring * 22;
+        const angle =
+          (slot * 2 * Math.PI) / circleSlots -
+          Math.PI / 2 +
+          (ring * Math.PI) / circleSlots;
+        const radius = 65 + ring * 45;
         const fx = cx + Math.cos(angle) * radius;
         const fy = cy + Math.sin(angle) * radius;
         const isSelected = selectedMemoryId === memory.id;
@@ -823,21 +840,28 @@ function MonthMemorySvg({
         const driftDelayB = getDelayClass(seed + 4);
         const driftDelayC = getDelayClass(seed + 7);
         return (
-          <g
+          <motion.g
             key={memory.id}
+            initial={{ scale: 0, opacity: 0, rotate: -20 }}
+            animate={{ scale: 1, opacity: 1, rotate: 0 }}
+            transition={{
+              type: "spring",
+              stiffness: 260,
+              damping: 20,
+              delay: (index % 12) * 0.05,
+            }}
             onClick={() => onMemoryClick(memory.id)}
             cursor="pointer"
-            className={`memory-enter ${baseDelayClass}`}
           >
             <circle
               cx={fx}
               cy={fy}
-              r={isSelected ? 21 : 17}
+              r={isSelected ? 24 : 20}
               fill={
-                isSelected ? "rgba(255,255,255,.72)" : "rgba(255,255,255,.45)"
+                isSelected ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)"
               }
-              stroke={isSelected ? season.dark : "rgba(255,255,255,.7)"}
-              strokeWidth={isSelected ? 2.1 : 1}
+              stroke={isSelected ? season.dark : "rgba(255,255,255,0.7)"}
+              strokeWidth={isSelected ? 2.2 : 0.8}
             />
 
             <g
@@ -846,16 +870,16 @@ function MonthMemorySvg({
               <circle
                 cx={fx}
                 cy={fy}
-                r={isSelected ? 18.8 : 15.8}
+                r={isSelected ? 22 : 18}
                 fill={c1}
-                opacity={0.2}
+                opacity={0.22}
               />
               <circle
                 cx={fx}
                 cy={fy}
-                r={isSelected ? 22 : 18.5}
+                r={isSelected ? 28 : 24}
                 fill={c2}
-                opacity={0.1}
+                opacity={0.12}
               />
             </g>
 
@@ -865,7 +889,7 @@ function MonthMemorySvg({
               <Flower
                 x={fx}
                 y={fy}
-                size={36}
+                size={34}
                 active={isSelected}
                 gid={gid}
                 c1={c1}
@@ -875,28 +899,28 @@ function MonthMemorySvg({
 
             <g>
               <ellipse
-                cx={fx + 10}
+                cx={fx + 7}
                 cy={fy - 2}
-                rx={1.2}
-                ry={2.2}
+                rx={0.9}
+                ry={1.6}
                 fill={c1}
                 opacity={0.5}
                 className={`flower-drift flower-drift-${concept} ${driftDelayA}`}
               />
               <ellipse
-                cx={fx - 8}
-                cy={fy + 3}
-                rx={1.1}
-                ry={2}
+                cx={fx - 6}
+                cy={fy + 2}
+                rx={0.8}
+                ry={1.5}
                 fill={c2}
                 opacity={0.46}
                 className={`flower-drift flower-drift-${concept} ${driftDelayB}`}
               />
               <ellipse
-                cx={fx + 2}
-                cy={fy - 9}
-                rx={1}
-                ry={1.8}
+                cx={fx + 1}
+                cy={fy - 7}
+                rx={0.7}
+                ry={1.3}
                 fill={c1}
                 opacity={0.44}
                 className={`flower-drift flower-drift-${concept} ${driftDelayC}`}
@@ -905,22 +929,22 @@ function MonthMemorySvg({
 
             <ConceptGlyph
               concept={concept}
-              x={fx}
-              y={fy}
+              x={fx - 2}
+              y={fy + 2}
               c1={c1}
               c2={c2}
               delayClass={getDelayClass(seed + 2)}
             />
             <text
               x={fx}
-              y={fy + 27}
+              y={fy + 24}
               textAnchor="middle"
-              fontSize="10"
-              opacity="0.78"
+              fontSize="12"
+              opacity="0.9"
             >
               {species.icon}
             </text>
-          </g>
+          </motion.g>
         );
       })}
 
@@ -944,7 +968,8 @@ export default function FlowerTreeCanvas({
   selectedMemoryId,
   onMemoryClick,
   onExportSvgChange,
-}: FlowerTreeCanvasProps) {
+  bottomBar,
+}: FlowerTreeCanvasProps & { bottomBar?: React.ReactNode }) {
   const yearBuckets = useMemo<YearBucket[]>(() => {
     const yearMap = new Map<number, Map<number, MemoryRecord[]>>();
 
@@ -973,7 +998,20 @@ export default function FlowerTreeCanvas({
 
   const [activeYearIndex, setActiveYearIndex] = useState(0);
   const [activeMonth, setActiveMonth] = useState<number | null>(null);
+  const [direction, setDirection] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchStartY, setTouchStartY] = useState<number | null>(null);
+
+  const prevYearIndex = useRef(activeYearIndex);
+
+  useEffect(() => {
+    if (activeYearIndex > prevYearIndex.current) {
+      setDirection(1);
+    } else if (activeYearIndex < prevYearIndex.current) {
+      setDirection(-1);
+    }
+    prevYearIndex.current = activeYearIndex;
+  }, [activeYearIndex]);
 
   const goPrevYear = () => {
     setActiveMonth(null);
@@ -1003,50 +1041,148 @@ export default function FlowerTreeCanvas({
   }
 
   return (
-    <div className="mt-2 overflow-hidden rounded-2xl bg-[linear-gradient(185deg,#f9fbe7_0%,#f1f8e9_30%,#e8f5e9_60%,#e0f2f1_100%)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] sm:rounded-[30px] sm:p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-white/80 px-3 py-1 text-[10px] font-semibold tracking-[0.12em] text-emerald-700">
-          <span>4 TÁN</span>
-          <span>•</span>
-          <span>12 THÁNG</span>
-        </div>
-        <span className="rounded-full border border-emerald-200/80 bg-white/85 px-3 py-1 text-[10px] font-semibold text-emerald-700">
-          Vuốt trái/phải để đổi năm
-        </span>
+    <div
+      className="mt-1 overflow-hidden rounded-2xl relative"
+      style={{
+        background:
+          "linear-gradient(150deg, #fde8f0 0%, #fdf3e3 25%, #e8f5e8 55%, #e3eeff 80%, #f5e8ff 100%)",
+      }}
+    >
+      <style>{`
+        @keyframes petalDrift {
+          0%   { transform: translateY(-40px) translateX(0) rotate(0deg);   opacity: 0; }
+          5%   { opacity: 0.9; }
+          85%  { opacity: 0.9; }
+          100% { transform: translateY(110vh) translateX(var(--drift-x)) rotate(var(--drift-r)); opacity: 0; }
+        }
+        .petal { animation: petalDrift linear infinite; }
+      `}</style>
+
+      {/* Background glow blobs */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+        <div
+          className="absolute top-0 left-[10%] w-[45%] h-[35%] rounded-full blur-[60px] opacity-40"
+          style={{
+            background: "radial-gradient(circle, #f9a8d4, transparent)",
+          }}
+        />
+        <div
+          className="absolute top-[20%] right-0 w-[40%] h-[40%] rounded-full blur-[60px] opacity-30"
+          style={{
+            background: "radial-gradient(circle, #93c5fd, transparent)",
+          }}
+        />
+        <div
+          className="absolute bottom-[10%] left-0 w-[45%] h-[40%] rounded-full blur-[60px] opacity-30"
+          style={{
+            background: "radial-gradient(circle, #86efac, transparent)",
+          }}
+        />
+        <div
+          className="absolute bottom-0 right-[10%] w-[40%] h-[35%] rounded-full blur-[60px] opacity-30"
+          style={{
+            background: "radial-gradient(circle, #c4b5fd, transparent)",
+          }}
+        />
       </div>
 
-      <div className="mb-2 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1">
-        {yearBuckets.map((bucket, idx) => {
-          const isActive = idx === safeActiveYearIndex;
+      {/* Falling petals in front of the tree */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden z-30">
+        {Array.from({ length: 36 }).map((_, i) => {
+          const emoji = ["🌸", "🌺", "🌼"][i % 3];
+          const left = (i * 11) % 100;
+          const size = 11 + (i % 7);
+          const dur = 9 + (i % 8);
+          const delay = (i % 12) * 0.65;
+          const driftX = -55 + ((i * 17) % 110);
+          const driftR = -320 + ((i * 47) % 640);
+
           return (
-            <button
-              key={bucket.year}
-              type="button"
-              onClick={() => {
-                setActiveYearIndex(idx);
-                setActiveMonth(null);
-              }}
-              className={`snap-start rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                isActive
-                  ? "border-emerald-500 bg-emerald-500 text-white"
-                  : "border-border bg-white/80 text-text-secondary"
-              }`}
+            <div
+              key={`p-${i}`}
+              className="petal absolute top-0 pointer-events-none"
+              style={
+                {
+                  left: `${left}%`,
+                  fontSize: `${size}px`,
+                  animationDuration: `${dur}s`,
+                  animationDelay: `${delay}s`,
+                  "--drift-x": `${driftX}px`,
+                  "--drift-r": `${driftR}deg`,
+                } as React.CSSProperties
+              }
             >
-              Năm {bucket.year}
-            </button>
+              {emoji}
+            </div>
           );
         })}
       </div>
 
+      {/* Year selector + nav — compact row, flush with edges */}
+      <div className="relative z-10 flex items-center gap-1 px-2 pt-2 pb-1">
+        <button
+          type="button"
+          onClick={goPrevYear}
+          disabled={safeActiveYearIndex === 0}
+          className="h-6 w-6 flex-shrink-0 flex items-center justify-center rounded-full bg-white/60 border border-emerald-300/40 text-emerald-700 text-[10px] hover:bg-emerald-500 hover:text-white disabled:opacity-20 transition-all shadow-sm"
+        >
+          ◀
+        </button>
+
+        <div className="flex gap-1 overflow-x-auto no-scrollbar flex-1">
+          {yearBuckets.map((bucket, idx) => {
+            const isActive = idx === safeActiveYearIndex;
+            return (
+              <button
+                key={bucket.year}
+                type="button"
+                onClick={() => {
+                  setActiveYearIndex(idx);
+                  setActiveMonth(null);
+                }}
+                className={`flex-shrink-0 rounded-full px-3 py-0.5 text-[10px] font-bold transition-all border ${
+                  isActive
+                    ? "bg-emerald-500 text-white border-emerald-500 shadow-sm"
+                    : "bg-white/50 text-emerald-700 border-emerald-300/30 hover:bg-white/70"
+                }`}
+              >
+                {bucket.year}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={goNextYear}
+          disabled={safeActiveYearIndex === yearBuckets.length - 1}
+          className="h-6 w-6 flex-shrink-0 flex items-center justify-center rounded-full bg-white/60 border border-emerald-300/40 text-emerald-700 text-[10px] hover:bg-emerald-500 hover:text-white disabled:opacity-20 transition-all shadow-sm"
+        >
+          ▶
+        </button>
+      </div>
+
       <div
-        className="rounded-2xl border border-white/50 bg-white/55 p-2"
-        onTouchStart={(event) => setTouchStartX(event.changedTouches[0]?.clientX ?? null)}
+        className="rounded-3xl border border-white/40 bg-white/30 p-4 transition-all duration-700 shadow-xl backdrop-blur-sm"
+        onTouchStart={(event) => {
+          if (activeMonth) return; // lock swipe when in month view
+          const touch = event.changedTouches[0];
+          setTouchStartX(touch?.clientX ?? null);
+          setTouchStartY(touch?.clientY ?? null);
+        }}
         onTouchEnd={(event) => {
-          if (touchStartX === null) return;
-          const endX = event.changedTouches[0]?.clientX ?? touchStartX;
+          if (activeMonth) return; // lock swipe when in month view
+          if (touchStartX === null || touchStartY === null) return;
+          const touch = event.changedTouches[0];
+          const endX = touch?.clientX ?? touchStartX;
+          const endY = touch?.clientY ?? touchStartY;
           const deltaX = endX - touchStartX;
+          const deltaY = endY - touchStartY;
           setTouchStartX(null);
+          setTouchStartY(null);
+          // Only treat as horizontal swipe if X movement dominates
           if (Math.abs(deltaX) < 42) return;
+          if (Math.abs(deltaY) > Math.abs(deltaX) * 0.7) return; // mostly vertical
           if (deltaX > 0) {
             goPrevYear();
           } else {
@@ -1054,97 +1190,107 @@ export default function FlowerTreeCanvas({
           }
         }}
       >
-        {activeYear && activeMonth ? (
-          <>
-            <div className="mb-2 flex items-center justify-between gap-2 px-1">
-              <button
-                type="button"
-                onClick={() => setActiveMonth(null)}
-                className="rounded-full border border-border bg-white/90 px-3 py-1 text-xs font-semibold text-text-secondary"
-              >
-                ← Về năm {activeYear.year}
-              </button>
-              <span className="rounded-full border border-border bg-white/80 px-3 py-1 text-[11px] font-semibold text-text-secondary">
-                {monthTitle(activeMonth)} • {activeMonthMemories.length} kỉ niệm
-              </span>
-            </div>
-            <MonthMemorySvg
-              year={activeYear.year}
-              month={activeMonth}
-              memories={activeMonthMemories}
-              selectedMemoryId={selectedMemoryId}
-              onMemoryClick={onMemoryClick}
-              registerExportSvg={onExportSvgChange}
-            />
-
-            {activeMonthMemories.length > 0 && (
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                {activeMonthMemories.map((m) => {
-                  const flowerId = getFlowerConcept(m);
-                  const badgeBg =
-                    FLOWER_BADGE_BG_CLASSES[
-                      (flowerId - 1) % FLOWER_BADGE_BG_CLASSES.length
-                    ];
-                  const species = getFlowerSpeciesByConcept(flowerId);
-                  return (
+        <div className="relative min-h-[420px] z-10">
+          <AnimatePresence mode="wait" custom={direction}>
+            <motion.div
+              key={
+                activeYear?.year + (activeMonth ? `-${activeMonth}` : "-tree")
+              }
+              custom={direction}
+              initial={{ x: direction * 80, opacity: 0, scale: 0.9 }}
+              animate={{ x: 0, opacity: 1, scale: 1 }}
+              exit={{ x: -direction * 80, opacity: 0, scale: 0.9 }}
+              transition={{ type: "spring", stiffness: 200, damping: 25 }}
+              className="w-full flex items-center justify-center"
+            >
+              {activeYear && activeMonth ? (
+                <div className="w-full">
+                  <div className="mb-4 flex items-center justify-between gap-2 px-2">
                     <button
-                      key={m.id}
-                      onClick={() => onMemoryClick(m.id)}
-                      className="flex items-center gap-2 rounded-xl border border-white/40 bg-white/40 p-2 text-left transition hover:bg-white/60"
+                      type="button"
+                      onClick={() => setActiveMonth(null)}
+                      className="rounded-full border border-emerald-500/20 bg-white/60 px-4 py-1.5 text-xs font-bold text-emerald-700 backdrop-blur-md hover:bg-white/80 transition-all"
                     >
-                      <div
-                        className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-sm ${badgeBg}`}
-                      >
-                        {species.icon}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-[10px] font-bold text-emerald-900">
-                          {m.title}
-                        </p>
-                        <p className="text-[9px] font-medium text-emerald-700/60">
-                          {formatExactDate(m)}
-                        </p>
-                      </div>
+                      ← {activeYear.year}
                     </button>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        ) : (
-          <YearTreeSvg
-            bucket={activeYear!}
-            selectedMonth={activeMonth}
-            onSelectMonth={setActiveMonth}
-            registerExportSvg={onExportSvgChange}
-          />
+                    <span className="rounded-full border border-emerald-500/10 bg-white/40 px-4 py-1.5 text-[12px] font-bold text-emerald-700">
+                      {monthTitle(activeMonth)} • {activeMonthMemories.length}{" "}
+                      HOA
+                    </span>
+                  </div>
+                  <MonthMemorySvg
+                    year={activeYear.year}
+                    month={activeMonth}
+                    memories={activeMonthMemories}
+                    selectedMemoryId={selectedMemoryId}
+                    onMemoryClick={onMemoryClick}
+                    registerExportSvg={onExportSvgChange}
+                  />
+
+                  {activeMonthMemories.length > 0 && (
+                    <div className="mt-6 grid grid-cols-2 gap-3 pb-2">
+                      {activeMonthMemories.map((m) => {
+                        const flowerId = getFlowerConcept(m);
+                        const badgeBg =
+                          FLOWER_BADGE_BG_CLASSES[
+                            (flowerId - 1) % FLOWER_BADGE_BG_CLASSES.length
+                          ];
+                        const species = getFlowerSpeciesByConcept(flowerId);
+                        return (
+                          <motion.button
+                            key={m.id}
+                            initial={{ opacity: 0, y: 15 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            whileHover={{ scale: 1.05, y: -2 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => onMemoryClick(m.id)}
+                            className="flex items-center gap-3 rounded-2xl border border-emerald-500/10 bg-white/50 p-3 text-left backdrop-blur-lg hover:bg-white/70 transition-all shadow-md"
+                          >
+                            <div
+                              className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-xl shadow-sm ${badgeBg}`}
+                            >
+                              {species.icon}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-[12px] font-black text-emerald-900 leading-tight">
+                                {m.title}
+                              </p>
+                              <p className="text-[10px] font-medium text-emerald-700/60">
+                                {formatExactDate(m)}
+                              </p>
+                            </div>
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="w-full py-4">
+                  <YearTreeSvg
+                    bucket={activeYear!}
+                    selectedMonth={activeMonth}
+                    onSelectMonth={setActiveMonth}
+                    registerExportSvg={onExportSvgChange}
+                  />
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+        {activeYear && !activeMonth ? (
+          <p className="text-center text-[10px] font-medium text-emerald-700/60 pb-1">
+            Nhấn vào tháng để xem hoa kỉ niệm 🌸
+          </p>
+        ) : null}
+
+        {/* Bottom Toolbar injected from outside */}
+        {bottomBar && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-emerald-500/10 pt-3 pb-1 px-1">
+            {bottomBar}
+          </div>
         )}
       </div>
-
-      <div className="mt-2 flex items-center justify-center gap-2">
-        <button
-          type="button"
-          onClick={goPrevYear}
-          disabled={safeActiveYearIndex === 0}
-          className="rounded-full border border-border bg-white/90 px-3 py-1.5 text-xs font-semibold text-text-secondary disabled:opacity-40"
-        >
-          ◀ Trái
-        </button>
-        <button
-          type="button"
-          onClick={goNextYear}
-          disabled={safeActiveYearIndex === yearBuckets.length - 1}
-          className="rounded-full border border-border bg-white/90 px-3 py-1.5 text-xs font-semibold text-text-secondary disabled:opacity-40"
-        >
-          Phải ▶
-        </button>
-      </div>
-
-      {activeYear && !activeMonth ? (
-        <p className="mt-2 text-center text-[11px] text-emerald-700">
-          Nhấn vào tháng để xem hoa kỉ niệm của năm {activeYear.year}.
-        </p>
-      ) : null}
     </div>
   );
 }

@@ -724,7 +724,7 @@ export default function RoomPlansBoard({
                 onClick={() => setDetailPlanId(null)}
                 className="rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-text-secondary"
               >
-                ← Back
+                ← Quay lại
               </button>
               <div className="flex items-center gap-1.5">
                 <button

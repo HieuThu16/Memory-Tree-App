@@ -38,7 +38,7 @@ export default function MusicClientPage({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h1 className="text-base font-semibold text-foreground sm:text-lg">
-              ?? Nh?c chung
+              🎵 Nhạc chung
             </h1>
             <span className="rounded-full border border-border bg-white/80 px-2.5 py-1 text-[10px] font-semibold text-text-secondary">
               {initialPlaylists.length} playlist
@@ -52,23 +52,23 @@ export default function MusicClientPage({
         {rooms.length === 0 ? (
           <div className="glass-card rounded-[28px] p-10 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-accent/10 text-3xl">
-              ??
+              🎵
             </div>
             <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-accent">
-              Chưa có khu vư?n
+              Chưa có khu vườn
             </p>
             <h2 className="mt-3 text-xl font-medium text-foreground">
-              T?o ho?c tham gia khu vư?n trư?c
+              Tạo hoặc tham gia khu vườn trước
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-text-secondary">
-              Playlist nh?c đư?c g?n theo t?ng khu vư?n chung. H?y t?o ho?c nh?n
-              l?i m?i vào khu vư?n v?i b?n bè đ? b?t đ?u nghe nh?c cùng nhau.
+              Playlist nhạc được gắn theo từng khu vườn chung. Hãy tạo hoặc nhận
+              lời mời vào khu vườn với bạn bè để bắt đầu nghe nhạc cùng nhau.
             </p>
             <Link
               href="/friends"
               className="btn-primary mt-5 inline-block px-6 py-3 text-sm"
             >
-              Đ?n trang B?n bè ?
+              Đến trang Bạn bè →
             </Link>
           </div>
         ) : (
@@ -86,7 +86,7 @@ export default function MusicClientPage({
                         : "border-border bg-white/80 text-foreground hover:border-accent/60"
                     }`}
                   >
-                    ?? {room.name || "Khu vư?n"}
+                    🌿 {room.name || "Khu vườn"}
                     <span className="ml-1.5 text-[11px] opacity-70">
                       {room.member_count} thành viên
                     </span>
@@ -96,7 +96,7 @@ export default function MusicClientPage({
             ) : (
               <div className="flex items-center gap-2 rounded-2xl border border-border bg-white/80 px-4 py-2.5">
                 <span className="text-sm font-medium text-foreground">
-                  ?? {selectedRoom?.name || "Khu vư?n"}
+                  🌿 {selectedRoom?.name || "Khu vườn"}
                 </span>
                 <span className="text-[11px] text-text-muted">
                   · {selectedRoom?.member_count ?? 0} thành viên
@@ -120,4 +120,3 @@ export default function MusicClientPage({
     </main>
   );
 }
-

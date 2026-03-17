@@ -42,8 +42,6 @@ export default function EffectsLayer() {
           className="absolute -bottom-1/4 -right-1/4 h-[80vh] w-[80vw] rounded-full bg-gradient-to-bl from-purple-500 via-pink-300 to-transparent blur-[120px]"
         />
       </div>
-
-      <div className="absolute inset-0 z-10 pointer-events-none" />
     </div>
   );
 }

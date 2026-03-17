@@ -93,13 +93,15 @@ export default function RoomClientSection({
     let isCancelled = false;
 
     const registerPushSubscription = async () => {
+      if (Notification.permission === "denied") return;
       const permission = await Notification.requestPermission();
       if (permission !== "granted" || isCancelled) return;
 
       const registration = await navigator.serviceWorker.ready;
       if (isCancelled) return;
 
-      const existingSubscription = await registration.pushManager.getSubscription();
+      const existingSubscription =
+        await registration.pushManager.getSubscription();
       const subscription =
         existingSubscription ??
         (await registration.pushManager.subscribe({
@@ -258,91 +260,81 @@ export default function RoomClientSection({
 
   return (
     <section className="glass-card overflow-hidden rounded-2xl p-2.5 sm:rounded-[30px] sm:p-4">
-      <div className="flex flex-col gap-3">
-        {/* Top Header Controls */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <span className="rounded-full bg-accent px-3 py-1.5 text-[10px] font-semibold text-white shadow-[0_12px_24px_-16px_rgba(108,76,215,0.9)]">
-              👥 {participants.length}/2
-            </span>
-            <span className="rounded-full border border-border bg-white/75 px-3 py-1.5 text-[10px] font-semibold text-text-secondary">
-              🌸 {filteredMemories.length} / {scopedMemories.length}
-            </span>
+      <div className="flex flex-col gap-2">
+        {/* Single compact toolbar row */}
+        <div className="flex items-center gap-1.5">
+          {/* Participant count */}
+          <span className="flex-shrink-0 rounded-full bg-accent px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">
+            👥 {participants.length}/2
+          </span>
+          {/* Memory count */}
+          <span className="flex-shrink-0 rounded-full border border-border bg-white/75 px-2.5 py-1 text-[10px] font-semibold text-text-secondary">
+            🌸 {filteredMemories.length}/{scopedMemories.length}
+          </span>
+
+          {/* Search — only outside tree mode */}
+          {memoryViewMode !== "tree" && (
+            <div className="relative flex-1 min-w-0">
+              <input
+                type="text"
+                placeholder="Tìm kỉ niệm chung..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="input-field w-full !rounded-xl !py-1.5 !pl-7 !text-xs"
+              />
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted text-xs">
+                🔍
+              </span>
+            </div>
+          )}
+
+          <div className="flex-1" />
+
+          {/* View toggle */}
+          <div className="flex-shrink-0 flex items-center rounded-xl border border-border bg-white/60 p-0.5 backdrop-blur-sm gap-0.5">
+            {(
+              [
+                { mode: "tree" as const, icon: "🌳" },
+                { mode: "list" as const, icon: "📋" },
+                { mode: "gallery" as const, icon: "🖼️" },
+                { mode: "map" as const, icon: "🗺️" },
+              ] as const
+            ).map(({ mode, icon }) => (
+              <button
+                key={mode}
+                onClick={() => handleSwitchViewMode(mode)}
+                className={`rounded-lg px-2 py-1.5 text-xs transition-colors ${
+                  memoryViewMode === mode
+                    ? "bg-accent text-white shadow-sm"
+                    : "text-text-secondary hover:bg-white"
+                }`}
+              >
+                {icon}
+              </button>
+            ))}
           </div>
+
+          {/* Add button */}
           <button
             type="button"
             onClick={() => openCreate(roomId)}
-            className="btn-primary rounded-full px-3 py-2 text-[10px]"
+            className="flex-shrink-0 btn-primary rounded-full px-3 py-1.5 text-[10px] whitespace-nowrap"
           >
             + Góp 🌱
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <input
-              type="text"
-              placeholder="Tìm kỉ niệm chung..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-field w-full !rounded-xl !py-2 !pl-8 !text-xs"
-            />
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted">
-              🔍
-            </span>
-          </div>
-          <div className="flex items-center rounded-xl border border-border bg-white/60 p-1 backdrop-blur-sm">
-            <button
-              onClick={() => handleSwitchViewMode("tree")}
-              className={`rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
-                memoryViewMode === "tree"
-                  ? "bg-accent text-white shadow-sm"
-                  : "text-text-secondary hover:bg-white"
-              }`}
-              title="Cây kỉ niệm"
-            >
-              🌳
-            </button>
-            <button
-              onClick={() => handleSwitchViewMode("list")}
-              className={`rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
-                memoryViewMode === "list"
-                  ? "bg-accent text-white shadow-sm"
-                  : "text-text-secondary hover:bg-white"
-              }`}
-              title="Danh sách"
-            >
-              📋
-            </button>
-            <button
-              onClick={() => handleSwitchViewMode("gallery")}
-              className={`rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
-                memoryViewMode === "gallery"
-                  ? "bg-accent text-white shadow-sm"
-                  : "text-text-secondary hover:bg-white"
-              }`}
-              title="Thư viện ảnh"
-            >
-              🖼️
-            </button>
-            <button
-              onClick={() => handleSwitchViewMode("map")}
-              className={`rounded-lg px-2.5 py-1.5 text-xs transition-colors ${
-                memoryViewMode === "map"
-                  ? "bg-accent text-white shadow-sm"
-                  : "text-text-secondary hover:bg-white"
-              }`}
-              title="Bản đồ kỷ niệm"
-            >
-              🗺️
-            </button>
-          </div>
-        </div>
       </div>
 
-      {/* Content View */}
-      <div className="mt-3 rounded-2xl bg-white/58 p-1.5 sm:p-3 min-h-[50vh] relative">
+      {/* Content */}
+      <div
+        className={`relative ${
+          memoryViewMode === "tree"
+            ? "mt-1"
+            : "mt-2 rounded-2xl bg-white/58 p-1.5 sm:p-3 min-h-[50vh]"
+        }`}
+      >
         {isSwitchingView ? (
-          <div className="absolute right-3 top-3 rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] text-text-muted">
+          <div className="absolute right-3 top-3 z-10 rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] text-text-muted">
             Đang chuyển tab...
           </div>
         ) : null}
@@ -382,3 +374,4 @@ export default function RoomClientSection({
     </section>
   );
 }
+

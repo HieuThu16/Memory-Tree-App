@@ -955,8 +955,14 @@ export default function RoomPlaylistManager({
       ) : null}
 
       {fullTrack ? (
-        <div className="fixed inset-0 z-[96] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-2xl border border-border bg-white p-4">
+        <div
+          className="fixed inset-0 z-[96] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+          onClick={() => setFullTrack(null)}
+        >
+          <div
+            className="w-full max-w-2xl rounded-2xl border border-border bg-white p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mb-3 flex items-center justify-between gap-2">
               <p className="truncate text-sm font-semibold text-foreground">
                 🎧 {fullTrack.title}

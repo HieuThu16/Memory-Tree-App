@@ -215,7 +215,7 @@ export default function MemoryDetailSheet({
                 onClose();
               }
             }}
-            className="glass-card relative mt-0 flex w-full max-h-[calc(100dvh-6rem)] max-w-lg flex-col overflow-hidden rounded-2xl shadow-2xl sm:-translate-x-1 sm:max-h-[calc(100dvh-7.5rem)] sm:rounded-3xl"
+            className="glass-card relative mt-0 flex w-full max-h-[calc(100dvh-6rem)] max-w-lg flex-col overflow-hidden rounded-2xl shadow-2xl sm:max-h-[calc(100dvh-7.5rem)] sm:rounded-3xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-center pt-2 sm:pt-3">

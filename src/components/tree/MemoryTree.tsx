@@ -16,21 +16,6 @@ import { deleteMemory } from "@/lib/actions";
 import FlowerTreeCanvas from "./FlowerTreeCanvas";
 import MemoryDetailSheet from "./MemoryDetailSheet";
 
-const longDateFormatter = new Intl.DateTimeFormat("vi-VN", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
-
-const createdAtFormatter = new Intl.DateTimeFormat("vi-VN", {
-  hour: "2-digit",
-  minute: "2-digit",
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  hour12: false,
-});
-
 const toSafeDate = (value?: string | null) => {
   if (!value) return null;
   const parsed = new Date(value);
@@ -43,24 +28,24 @@ const getMemoryDate = (memory: MemoryRecord) =>
 const formatLongDate = (memory: MemoryRecord) => {
   const date = getMemoryDate(memory);
   if (!date) return "?";
-  
+
   const day = String(date.getDate()).padStart(2, "0");
   const month = date.getMonth() + 1;
   const year = date.getFullYear();
-  
+
   return `${day} thg ${month}, ${year}`;
 };
 
 const formatCreatedAt = (memory: MemoryRecord) => {
   const date = toSafeDate(memory.created_at);
   if (!date) return "?";
-  
+
   const hour = String(date.getHours()).padStart(2, "0");
   const minute = String(date.getMinutes()).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = date.getFullYear();
-  
+
   return `${hour}:${minute} ${day}/${month}/${year}`;
 };
 
@@ -75,6 +60,7 @@ export default function MemoryTree({
   participantsByUserId,
   currentUserId,
   hideTree,
+  bottomBar,
 }: {
   memories: MemoryRecord[];
   participants?: MemoryParticipant[];
@@ -82,6 +68,7 @@ export default function MemoryTree({
   isTwoPerson?: boolean;
   currentUserId?: string;
   hideTree?: boolean;
+  bottomBar?: React.ReactNode;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const detailPopupRef = useRef<HTMLDivElement | null>(null);
@@ -98,30 +85,6 @@ export default function MemoryTree({
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
   const [isDeleting, startDeleteTransition] = useTransition();
   const detailDragControls = useDragControls();
-
-  // Debug logging for location display investigation
-  useEffect(() => {
-    const memoriesWithLocation = memories.filter((m) => m.location);
-    if (memoriesWithLocation.length > 0) {
-      console.log(
-        `[MemoryTree] ${memoriesWithLocation.length}/${memories.length} memories have location:`,
-        memoriesWithLocation.map((m) => ({
-          id: m.id,
-          title: m.title,
-          location: m.location,
-          room_id: m.room_id,
-        })),
-      );
-    }
-    // Also check if any memories have location=null but showed location in DB
-    const memoriesWithoutLocation = memories.filter((m) => !m.location);
-    if (memoriesWithoutLocation.length > 0) {
-      console.log(
-        `[MemoryTree] ${memoriesWithoutLocation.length} memories WITHOUT location:`,
-        memoriesWithoutLocation.map((m) => ({ id: m.id, title: m.title })),
-      );
-    }
-  }, [memories]);
 
   const memoriesById = useMemo(
     () => new Map(memories.map((memory) => [memory.id, memory] as const)),
@@ -207,44 +170,6 @@ export default function MemoryTree({
       document.body.style.overscrollBehavior = originalOverscrollBehavior;
     };
   }, [isDetailOpen]);
-
-  useEffect(() => {
-    if (!isDetailOpen || !selectedMemory || !detailPopupRef.current) {
-      return;
-    }
-
-    const logCornerPositions = () => {
-      const rect = detailPopupRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      console.log("[MemoryDetailPopup] top-left:", {
-        x: Math.round(rect.left),
-        y: Math.round(rect.top),
-      });
-      console.log("[MemoryDetailPopup] top-right:", {
-        x: Math.round(rect.right),
-        y: Math.round(rect.top),
-      });
-      console.log("[MemoryDetailPopup] size:", {
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      });
-      console.log("[MemoryDetailPopup] viewport:", {
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    };
-
-    const rafId = requestAnimationFrame(logCornerPositions);
-    const settledTimer = window.setTimeout(logCornerPositions, 320);
-    window.addEventListener("resize", logCornerPositions);
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      window.clearTimeout(settledTimer);
-      window.removeEventListener("resize", logCornerPositions);
-    };
-  }, [isDetailOpen, selectedMemory]);
 
   const handleDownload = () => {
     if (!svgRef.current) return;
@@ -356,7 +281,6 @@ export default function MemoryTree({
         }
       `}</style>
       <div className={hideTree ? "hidden" : "w-full"}>
-    
         <FlowerTreeCanvas
           memories={memories}
           selectedMemoryId={selectedId}
@@ -367,6 +291,7 @@ export default function MemoryTree({
           onExportSvgChange={(svg) => {
             svgRef.current = svg;
           }}
+          bottomBar={bottomBar}
         />
       </div>
 
@@ -401,7 +326,6 @@ export default function MemoryTree({
         onEdit={handleEdit}
         onDelete={handleDelete}
       />
-
     </div>
   );
 }

@@ -115,7 +115,7 @@ export default function TabNav() {
   const pathname = usePathname();
 
   return (
-    <nav 
+    <nav
       className="fixed inset-x-0 z-50 mx-auto w-[min(480px,calc(100vw-0.9rem))] pb-2"
       style={{ bottom: "max(12px, env(safe-area-inset-bottom))" }}
     >
@@ -136,8 +136,8 @@ export default function TabNav() {
                   : "text-text-secondary hover:bg-white/60 hover:scale-105"
               }`}
             >
-              <span className="scale-110 mb-0.5">{tab.icon}</span>
-              <span className="text-[9px] font-bold tracking-wide">
+              <span className="inline-block scale-110 mb-0.5">{tab.icon}</span>
+              <span className="text-[10px] font-bold tracking-wide">
                 {tab.label}
               </span>
             </Link>

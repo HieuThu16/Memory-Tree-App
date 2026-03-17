@@ -71,20 +71,18 @@ export default async function RoomPage({
 
       <main className="px-3 pb-24 pt-3 sm:px-6 sm:pt-4">
         <section className="mx-auto flex w-full max-w-5xl flex-col gap-3 sm:gap-4">
-          {/* Compact inline header */}
+          {/* Room header - all on one row */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <BackButton href="/friends" className="text-[11px]" />
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-5 min-w-0">
-                <h1 className="flex items-center gap-1 truncate text-sm font-bold text-rose-900 sm:text-base">
-                  <span className="text-base">🌿</span> {room.name || "Khu vườn chung"}
-                </h1>
-                
-          
-      
-              </div>
+              <h1 className="flex items-center gap-1 truncate text-sm font-bold text-rose-900 sm:text-base">
+                <span className="text-base">🌿</span>
+                <span className="truncate">{room.name || "Khu vườn chung"}</span>
+              </h1>
             </div>
-            <div className="flex items-center gap-1">
+            
+            {/* Right side: avatars + stats + add + invite */}
+            <div className="flex flex-shrink-0 items-center gap-1.5">
               <PresenceAvatars />
               <InviteLinkButton inviteCode={roomRecord.invite_code} />
             </div>
