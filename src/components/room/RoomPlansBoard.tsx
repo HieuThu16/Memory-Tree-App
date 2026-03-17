@@ -1,23 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import type { MemoryParticipant, RoomPlanRecord } from "@/lib/types";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUiStore } from "@/lib/stores/uiStore";
-import BackButton from "@/components/ui/BackButton";
-
-const formatDateTime = (value: string | null) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-};
+import {
+  PLAN_BUCKETS,
+  TILTS,
+  TAPE_PATTERN,
+  formatDate,
+  formatDateTime,
+  monthLabel,
+  iconFromTitle,
+  getPlanColorTheme,
+  parsePlanDescription,
+  formatPlanDescription,
+} from "./plansJournalConfig";
+import type { PlanBucket } from "./plansJournalConfig";
 
 type Props = {
   roomId: string;
@@ -26,70 +26,6 @@ type Props = {
   participantsByUserId: Map<string, MemoryParticipant>;
   onPlansCountChange?: (count: number) => void;
 };
-
-// Sprout icons for pending plans – each plan gets a different sprout based on its index
-const SPROUT_ICONS = [
-  "🌱",
-  "🌿",
-  "☘️",
-  "🍀",
-  "🌾",
-  "🪴",
-  "🎋",
-  "🎍",
-  "🌵",
-  "🪻",
-];
-// Flower icons for completed plans – each plan blooms into a different flower
-const FLOWER_ICONS = [
-  "🌸",
-  "🌺",
-  "🌻",
-  "🌼",
-  "🌷",
-  "🌹",
-  "💐",
-  "🪷",
-  "🏵️",
-  "💮",
-];
-
-// Simple hash to deterministically assign an icon based on plan title
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
-  }
-  return Math.abs(hash);
-}
-
-function PlanIcon({
-  title,
-  isCompleted,
-}: {
-  title: string;
-  isCompleted: boolean;
-}) {
-  const idx = hashString(title);
-  const icon = isCompleted
-    ? FLOWER_ICONS[idx % FLOWER_ICONS.length]
-    : SPROUT_ICONS[idx % SPROUT_ICONS.length];
-
-  return (
-    <span
-      className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-lg transition-all duration-300 ${
-        isCompleted
-          ? "bg-gradient-to-br from-pink-100 to-rose-100 shadow-[0_2px_8px_-2px_rgba(244,114,182,0.4)] scale-110"
-          : "bg-gradient-to-br from-emerald-50 to-lime-50 shadow-[0_2px_8px_-2px_rgba(34,197,94,0.3)]"
-      }`}
-      title={isCompleted ? "Đã nở hoa 🌸" : "Đang nảy mầm 🌱"}
-    >
-      {icon}
-    </span>
-  );
-}
-
-type PlanFilter = "all" | "pending" | "completed";
 
 export default function RoomPlansBoard({
   roomId,
@@ -100,28 +36,20 @@ export default function RoomPlansBoard({
 }: Props) {
   const addToast = useUiStore((state) => state.addToast);
   const [plans, setPlans] = useState<RoomPlanRecord[]>(initialPlans);
+  const [isAdding, setIsAdding] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("Dự định gần");
+  const [bucket, setBucket] = useState<PlanBucket>("Gần 1 năm");
   const [detailPlanId, setDetailPlanId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [editingDescription, setEditingDescription] = useState("");
-  const [editingCategory, setEditingCategory] = useState("Dự định gần");
-  const [isAdding, setIsAdding] = useState(false);
-  const [planFilter, setPlanFilter] = useState<PlanFilter>("all");
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [editingBucket, setEditingBucket] = useState<PlanBucket>("Gần 1 năm");
+  const [isClient, setIsClient] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const parsePlanDescription = (desc: string | null) => {
-    if (!desc) return { cat: "Dự định gần", text: "" };
-    const match = desc.match(/^##CAT:(.*)##\n([\s\S]*)$/);
-    if (match) return { cat: match[1], text: match[2] };
-    return { cat: "Dự định gần", text: desc };
-  };
-
-  const formatPlanDescription = (cat: string, text: string) => {
-    return `##CAT:${cat}##\n${text}`;
-  };
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     setPlans(initialPlans);
@@ -148,7 +76,7 @@ export default function RoomPlansBoard({
           setPlans((current) => {
             const next = [
               inserted,
-              ...current.filter((plan) => plan.id !== inserted.id),
+              ...current.filter((p) => p.id !== inserted.id),
             ];
             return next.sort(
               (a, b) =>
@@ -203,33 +131,35 @@ export default function RoomPlansBoard({
     [detailPlanId, plans],
   );
 
-  const filteredPlans = useMemo(() => {
-    let result = plans;
-
-    if (planFilter === "pending") {
-      result = result.filter((plan) => !plan.is_completed);
-    } else if (planFilter === "completed") {
-      result = result.filter((plan) => plan.is_completed);
-    }
-
-    if (categoryFilter !== "all") {
-      result = result.filter(
-        (plan) => parsePlanDescription(plan.description).cat === categoryFilter,
-      );
-    }
-
-    return result;
-  }, [planFilter, categoryFilter, plans]);
-
   useEffect(() => {
-    setEditingTitle(selectedPlan?.title ?? "");
-    setEditingDescription(
-      parsePlanDescription(selectedPlan?.description ?? "").text,
-    );
-    setEditingCategory(
-      parsePlanDescription(selectedPlan?.description ?? "").cat,
-    );
+    if (!selectedPlan) return;
+    const parsed = parsePlanDescription(selectedPlan.description);
+    setEditingTitle(selectedPlan.title);
+    setEditingDescription(parsed.text);
+    setEditingBucket(parsed.bucket);
   }, [selectedPlan]);
+
+  const plansByBucket = useMemo(() => {
+    const mapped = new Map<PlanBucket, RoomPlanRecord[]>();
+    PLAN_BUCKETS.forEach((item) => mapped.set(item.key, []));
+
+    plans.forEach((plan) => {
+      const parsed = parsePlanDescription(plan.description);
+      mapped.get(parsed.bucket)?.push(plan);
+    });
+
+    mapped.forEach((items, key) => {
+      mapped.set(
+        key,
+        [...items].sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        ),
+      );
+    });
+
+    return mapped;
+  }, [plans]);
 
   const getDisplayName = (userId: string | null) => {
     if (!userId) return "-";
@@ -251,7 +181,7 @@ export default function RoomPlansBoard({
           room_id: roomId,
           added_by: currentUserId,
           title: resolvedTitle,
-          description: formatPlanDescription(category, description.trim()),
+          description: formatPlanDescription(bucket, description.trim()),
         })
         .select(
           "id, room_id, added_by, title, description, is_completed, completed_by, completed_at, created_at, updated_at",
@@ -273,6 +203,7 @@ export default function RoomPlansBoard({
 
       setTitle("");
       setDescription("");
+      setBucket("Gần 1 năm");
       setIsAdding(false);
       addToast("Đã thêm dự định mới.", "success");
     });
@@ -318,9 +249,7 @@ export default function RoomPlansBoard({
   };
 
   const handleUpdatePlan = () => {
-    if (!selectedPlan) {
-      return;
-    }
+    if (!selectedPlan) return;
 
     const resolvedTitle = editingTitle.trim();
     if (!resolvedTitle) {
@@ -335,7 +264,7 @@ export default function RoomPlansBoard({
         .update({
           title: resolvedTitle,
           description: formatPlanDescription(
-            editingCategory,
+            editingBucket,
             editingDescription.trim(),
           ),
           updated_at: new Date().toISOString(),
@@ -365,9 +294,7 @@ export default function RoomPlansBoard({
   };
 
   const handleDeletePlan = (planId: string) => {
-    if (!confirm("Xóa dự định này?")) {
-      return;
-    }
+    if (!confirm("Xóa dự định này?")) return;
 
     startTransition(async () => {
       const supabase = createSupabaseBrowserClient();
@@ -389,365 +316,363 @@ export default function RoomPlansBoard({
   };
 
   return (
-    <div className="space-y-3 rounded-2xl bg-white/80 p-3 sm:p-4">
+    <div
+      className="relative overflow-hidden rounded-2xl border border-[#dccbb3] bg-[#ede0ce] p-2.5 sm:p-3"
+      style={{
+        backgroundImage:
+          "radial-gradient(ellipse at 20% 10%, rgba(255,200,150,.2) 0%, transparent 55%)",
+        pointerEvents: selectedPlan ? "none" : "auto",
+      }}
+    >
+      <style>{`
+        @keyframes paperReveal {
+          0% { opacity: 0; transform: rotate(var(--tilt)) translateY(14px); }
+          100% { opacity: 1; transform: rotate(var(--tilt)) translateY(0); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes paperUnfold {
+          0% { opacity: 0; transform: translate(-50%,-50%) scale(.8) rotate(-4deg); }
+          80% { transform: translate(-50%,-50%) scale(1.02) rotate(.5deg); }
+          100% { opacity: 1; transform: translate(-50%,-50%) scale(1) rotate(0); }
+        }
+      `}</style>
+
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(180,130,90,.06) 27px, rgba(180,130,90,.06) 28px)",
+        }}
+      />
+
       {isPending ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+        <div className="relative z-10 mb-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
           Đang xử lý... Vui lòng chờ.
         </div>
       ) : null}
 
-      {/* Header with stats and add button */}
-      <div className="flex items-center justify-between gap-2 px-1">
-        <p className="text-xs font-semibold text-text-secondary">
-          {filteredPlans.length} / {plans.length} dự định
-        </p>
+      <div className="relative z-10 mb-2 flex items-center justify-between gap-2 px-1">
+        <span className="rounded-full border border-[#d9c8af] bg-white/75 px-3 py-1 text-[10px] font-semibold text-[#7a5a3a]">
+          📝 {plans.length} dự định
+        </span>
         <button
           type="button"
-          onClick={() => setIsAdding(true)}
-          className="btn-primary rounded-full px-3 py-1.5 text-xs font-bold"
+          onClick={() => setIsAdding((v) => !v)}
+          className="rounded-full border border-[#d9c8af] bg-white/80 px-3 py-1.5 text-[11px] font-bold text-[#6a4a2b] hover:bg-white"
         >
-          + Thêm 🌱
+          {isAdding ? "Ẩn" : "+ Thêm dự định"}
         </button>
       </div>
 
-      {/* Create Modal */}
-      {isAdding && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <p className="text-sm font-semibold uppercase tracking-[0.1em] text-text-secondary">
-                🌱 Gieo hạt dự định
-              </p>
-              <button
-                type="button"
-                onClick={() => setIsAdding(false)}
-                className="rounded-full bg-slate-100 p-1.5 text-text-muted transition-colors hover:bg-slate-200"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-4 grid gap-3">
-              <input
-                type="text"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="Dự định mới..."
-                disabled={isPending}
-                className="input-field !rounded-xl !py-2.5 text-sm"
-              />
-              <select
-                value={category}
-                onChange={(event) => setCategory(event.target.value)}
-                disabled={isPending}
-                aria-label="Kỳ hạn dự định mới"
-                className="input-field !rounded-xl !py-2.5 text-sm"
-              >
-                <option value="Dự định gần">Dự định gần</option>
-                <option value="1-2 năm">1-2 năm</option>
-                <option value="5-10 năm">5-10 năm</option>
-              </select>
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="Mô tả chi tiết..."
-                rows={3}
-                disabled={isPending}
-                className="input-field resize-none !rounded-xl !py-2.5 text-sm"
-              />
-              <button
-                type="button"
-                onClick={handleCreatePlan}
-                disabled={isPending}
-                className="btn-primary mt-2 rounded-full px-4 py-2.5 text-sm font-semibold disabled:opacity-60"
-              >
-                {isPending ? "Đang gieo..." : "🌱 Gieo mầm dự định"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* List container */}
-      <div className="rounded-2xl border border-border bg-white/85 p-3">
-        <div className="flex flex-col gap-2 border-b border-border pb-2 mb-2">
-          <div className="inline-flex rounded-full border border-border bg-white p-1 self-start">
-            <button
-              type="button"
-              onClick={() => setPlanFilter("all")}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
-                planFilter === "all"
-                  ? "bg-accent text-white"
-                  : "text-text-secondary hover:bg-white/70"
-              }`}
-            >
-              Tất cả
-            </button>
-            <button
-              type="button"
+      {isAdding ? (
+        <div className="relative z-10 mb-3 rounded-xl border border-[#d9c8af] bg-white/70 p-2.5">
+          <div className="grid gap-2 sm:grid-cols-[1.4fr_1fr_auto]">
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Tên dự định..."
               disabled={isPending}
-              onClick={() => setPlanFilter("pending")}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
-                planFilter === "pending"
-                  ? "bg-accent text-white"
-                  : "text-text-secondary hover:bg-white/70"
-              }`}
+              className="input-field !rounded-xl !py-2 text-xs"
+            />
+            <select
+              value={bucket}
+              onChange={(e) => setBucket(e.target.value as PlanBucket)}
+              disabled={isPending}
+              className="input-field !rounded-xl !py-2 text-xs"
+              aria-label="Kỳ hạn dự định"
             >
-              Chưa xong
-            </button>
+              {PLAN_BUCKETS.map((item) => (
+                <option key={item.key} value={item.key}>
+                  {item.key}
+                </option>
+              ))}
+            </select>
             <button
               type="button"
-              onClick={() => setPlanFilter("completed")}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
-                planFilter === "completed"
-                  ? "bg-accent text-white"
-                  : "text-text-secondary hover:bg-white/70"
-              }`}
+              onClick={handleCreatePlan}
+              disabled={isPending}
+              className="rounded-xl border border-[#d9c8af] bg-[#fffdfa] px-3 py-2 text-xs font-semibold text-[#6a4a2b] disabled:opacity-60"
             >
-              Đã xong
+              Thêm
             </button>
           </div>
-          <div className="inline-flex flex-wrap gap-1.5 w-full">
-            <span className="text-[10px] text-text-muted mr-1 my-auto">
-              Loại:
-            </span>
-            {["all", "Dự định gần", "1-2 năm", "5-10 năm"].map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setCategoryFilter(cat)}
-                className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition border ${
-                  categoryFilter === cat
-                    ? "border-accent bg-accent text-white"
-                    : "border-border bg-white text-text-secondary hover:border-accent"
-                }`}
-              >
-                {cat === "all" ? "Tất cả kỳ hạn" : cat}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {filteredPlans.length === 0 ? (
-          <p className="mt-3 rounded-xl border border-dashed border-border bg-white/70 px-3 py-4 text-sm text-text-muted">
-            {planFilter === "all"
-              ? "Chưa có dự định nào. Hai bạn có thể thêm ngay phía trên."
-              : "Không có dự định phù hợp bộ lọc hiện tại."}
-          </p>
-        ) : (
-          <div className="mt-3 space-y-2">
-            {filteredPlans.map((plan) => (
-              <div
-                key={plan.id}
-                className="rounded-xl border border-border bg-white px-3 py-2"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleToggleCompleted(plan)}
-                    disabled={isPending}
-                    className="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white disabled:opacity-60"
-                    title={
-                      plan.is_completed
-                        ? "Bỏ đánh dấu hoàn thành"
-                        : "Đánh dấu hoàn thành"
-                    }
-                  >
-                    <PlanIcon
-                      title={plan.title}
-                      isCompleted={plan.is_completed}
-                    />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDetailPlanId(plan.id)}
-                    className="min-w-0 flex-1 text-left"
-                  >
-                    <p
-                      className={`truncate text-sm font-semibold ${
-                        plan.is_completed
-                          ? "text-text-muted line-through"
-                          : "text-foreground"
-                      }`}
-                    >
-                      {plan.title}
-                    </p>
-                    <p className="mt-1 truncate text-xs text-text-secondary">
-                      {parsePlanDescription(plan.description).text ||
-                        "Chưa có mô tả"}
-                    </p>
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="rounded-full bg-emerald-50 text-emerald-700 px-1.5 py-0.5 text-[9px] font-semibold">
-                        {parsePlanDescription(plan.description).cat}
-                      </span>
-                      <p className="text-[11px] text-text-muted">
-                        Thêm bởi {getDisplayName(plan.added_by)} ·{" "}
-                        {formatDateTime(plan.created_at)}
-                      </p>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDetailPlanId(plan.id)}
-                    className="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-white text-text-secondary"
-                    title="Mở chi tiết"
-                  >
-                    ›
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {selectedPlan ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 px-3 py-4 backdrop-blur-sm"
-          onClick={() => setDetailPlanId(null)}
-        >
-          <div
-            className="flex h-[88dvh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-border bg-white shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-3 sm:px-4">
-              <div className="flex min-w-0 items-center gap-2">
-                <BackButton onClick={() => setDetailPlanId(null)} />
-                <p className="truncate text-sm font-semibold text-foreground sm:text-base">
-                  📝 Chi tiết dự định
-                </p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleUpdatePlan}
-                  disabled={isPending}
-                  className="rounded-full border border-border bg-white px-3 py-1.5 text-xs font-semibold text-text-secondary hover:border-accent hover:text-accent disabled:opacity-60"
-                >
-                  {isPending ? "Đang sửa..." : "✏️ Sửa"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeletePlan(selectedPlan.id)}
-                  disabled={isPending}
-                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 disabled:opacity-60"
-                >
-                  🗑 Xóa
-                </button>
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-4 sm:px-4">
-              <div className="rounded-2xl border border-border bg-white/85 p-3">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-muted">
-                  Tên dự định
-                </label>
-                <input
-                  type="text"
-                  value={editingTitle}
-                  onChange={(event) => setEditingTitle(event.target.value)}
-                  disabled={isPending}
-                  className="input-field mt-2 !rounded-xl !py-2.5 text-sm"
-                  aria-label="Tên dự định"
-                />
-              </div>
-
-              <div className="rounded-2xl border border-border bg-white/85 p-3">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-muted">
-                  Kỳ hạn
-                </label>
-                <select
-                  value={editingCategory}
-                  onChange={(event) => setEditingCategory(event.target.value)}
-                  disabled={isPending}
-                  aria-label="Kỳ hạn dự định"
-                  className="input-field mt-2 !rounded-xl !py-2.5 text-sm"
-                >
-                  <option value="Dự định gần">Dự định gần</option>
-                  <option value="1-2 năm">1-2 năm</option>
-                  <option value="5-10 năm">5-10 năm</option>
-                </select>
-              </div>
-
-              <div className="rounded-2xl border border-border bg-white/85 p-3">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-muted">
-                  Mô tả
-                </label>
-                <textarea
-                  value={editingDescription}
-                  onChange={(event) =>
-                    setEditingDescription(event.target.value)
-                  }
-                  rows={4}
-                  disabled={isPending}
-                  className="input-field mt-2 resize-none !rounded-xl !py-2.5 text-sm"
-                  aria-label="Mô tả dự định"
-                />
-              </div>
-
-              <div className="rounded-2xl border border-border bg-white/85 p-3 text-xs text-text-secondary">
-                <p>Người thêm: {getDisplayName(selectedPlan.added_by)}</p>
-                <p>Thời gian thêm: {formatDateTime(selectedPlan.created_at)}</p>
-                <p>
-                  Trạng thái:{" "}
-                  {selectedPlan.is_completed
-                    ? "Đã hoàn thành"
-                    : "Chưa hoàn thành"}
-                </p>
-                <p>
-                  Người đánh dấu: {getDisplayName(selectedPlan.completed_by)}
-                </p>
-                <p>Khi đánh dấu: {formatDateTime(selectedPlan.completed_at)}</p>
-              </div>
-
-              <div className="flex gap-2 pb-2">
-                <button
-                  type="button"
-                  onClick={() => handleToggleCompleted(selectedPlan)}
-                  disabled={isPending}
-                  className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-2 text-xs font-semibold text-text-secondary"
-                >
-                  <PlanIcon
-                    title={selectedPlan.title}
-                    isCompleted={selectedPlan.is_completed}
-                  />
-                  <span>
-                    {selectedPlan.is_completed
-                      ? "Bỏ đánh dấu"
-                      : "Đánh dấu hoàn thành"}
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-2 border-t border-border bg-white/95 px-3 py-2 sm:px-4">
-              <button
-                type="button"
-                onClick={() => setDetailPlanId(null)}
-                className="rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-text-secondary"
-              >
-                ← Quay lại
-              </button>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleUpdatePlan}
-                  disabled={isPending}
-                  className="btn-primary rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
-                >
-                  {isPending ? "Đang sửa..." : "✏️ Sửa"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDeletePlan(selectedPlan.id)}
-                  disabled={isPending}
-                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 disabled:opacity-60"
-                >
-                  🗑 Xóa
-                </button>
-              </div>
-            </div>
-          </div>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            placeholder="Mô tả (tuỳ chọn)..."
+            disabled={isPending}
+            className="input-field mt-2 resize-none !rounded-xl !py-2 text-xs"
+          />
         </div>
       ) : null}
+
+      <div className="relative z-10 overflow-x-auto pb-1">
+        <div className="min-w-[860px]">
+          <div className="mb-2 flex items-center justify-center">
+            <div className="relative inline-block">
+              <div
+                className="absolute -left-4 -right-4 -top-1 h-4 rounded-sm opacity-90"
+                style={{ background: TAPE_PATTERN("#ffd6e0") }}
+              />
+              <div className="rounded bg-white/75 px-8 py-2 shadow-[2px_3px_14px_rgba(100,60,30,.1)]">
+                <div className="text-center text-xl font-bold tracking-[0.4em] text-[#6b3a1f]">
+                  2026
+                </div>
+                <div className="mt-0.5 text-center text-[10px] tracking-[0.25em] text-[#a07848]">
+                  nhật ký dự định
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 px-1">
+            {PLAN_BUCKETS.map((col) => {
+              const bucketPlans = plansByBucket.get(col.key) ?? [];
+              return (
+                <div key={col.key}>
+                  <div
+                    className="mb-2 rounded-t-md border-b-[3px] p-3 text-center shadow-[0_2px_8px_rgba(0,0,0,.06)]"
+                    style={{
+                      background: col.hdr,
+                      borderBottomColor: col.tape,
+                    }}
+                  >
+                    <div className="mb-1 text-xl">{col.icon}</div>
+                    <div
+                      className="text-base font-bold"
+                      style={{ color: col.accent }}
+                    >
+                      {col.key}
+                    </div>
+                    <div className="text-xs text-black/45">{col.sub}</div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {bucketPlans.length === 0 ? (
+                      <div className="rounded-md border border-[#dccbb3] bg-white/45 px-3 py-5 text-center text-xs text-[#9b7a59]">
+                        Chưa có dự định
+                      </div>
+                    ) : (
+                      bucketPlans.map((plan, idx) => {
+                        const tilt = TILTS[idx % TILTS.length];
+                        const visual = getPlanColorTheme(
+                          `${plan.id}:${plan.title}`,
+                        );
+                        const parsed = parsePlanDescription(plan.description);
+                        return (
+                          <div
+                            key={plan.id}
+                            style={{
+                              ["--tilt" as string]: `${tilt}deg`,
+                              animation: `paperReveal .5s ease ${idx * 0.08}s both`,
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setDetailPlanId(plan.id)}
+                              className="relative block w-full rounded-md border border-[#e8dcc9] p-3 text-center shadow-[2px_3px_10px_rgba(0,0,0,.1)] transition-transform hover:scale-[1.02]"
+                              style={{
+                                transform: `rotate(${tilt}deg)`,
+                                background: plan.is_completed
+                                  ? "linear-gradient(145deg,#fff,#f8f8f8)"
+                                  : visual.card,
+                              }}
+                            >
+                              <div
+                                className="absolute -top-2 left-1/2 h-4 w-9 -translate-x-1/2 rounded-sm opacity-95"
+                                style={{ background: TAPE_PATTERN(col.tape) }}
+                              />
+                              <div className="mb-1 text-lg">
+                                {iconFromTitle(plan.title)}
+                              </div>
+                              <div
+                                className={`line-clamp-2 text-[13px] font-bold leading-snug ${
+                                  plan.is_completed
+                                    ? "text-[#8f7d67] line-through"
+                                    : "text-[#3a2010]"
+                                }`}
+                              >
+                                {plan.title}
+                              </div>
+                              <div
+                                className="mt-1 text-[11px] italic"
+                                style={{ color: visual.accent }}
+                              >
+                                {formatDate(plan.created_at)}
+                              </div>
+                              {parsed.text ? (
+                                <div className="mt-1 line-clamp-1 text-[11px] text-[#6d4b2d]/80">
+                                  {parsed.text}
+                                </div>
+                              ) : null}
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {selectedPlan && isClient
+        ? createPortal(
+            (() => {
+              const detailVisual = getPlanColorTheme(
+                `${selectedPlan.id}:${selectedPlan.title}:detail`,
+              );
+              return (
+                <>
+                  <div
+                    className="fixed inset-0 z-[9998]"
+                    style={{
+                      zIndex: 2147483646,
+                      pointerEvents: "auto",
+                      background:
+                        "radial-gradient(circle at 20% 20%, rgba(255,255,255,0.6) 0%, rgba(255,244,229,0.7) 55%, rgba(255,239,214,0.78) 100%)",
+                      animation: "fadeIn .25s ease",
+                    }}
+                    onClick={() => setDetailPlanId(null)}
+                  />
+
+                  <div
+                    className="fixed left-1/2 top-1/2 z-[9999] w-[min(94vw,460px)]"
+                    style={{
+                      zIndex: 2147483647,
+                      pointerEvents: "auto",
+                      transform: "translate(-50%,-50%)",
+                      animation: "paperUnfold .35s cubic-bezier(.34,1.4,.64,1)",
+                    }}
+                  >
+                    <div
+                      className="relative rounded-lg border border-[#dbc7a9] p-5 shadow-[0_20px_45px_rgba(0,0,0,.18)]"
+                      style={{
+                        background: detailVisual.detail,
+                        backgroundImage:
+                          "repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(180,130,90,.05) 27px, rgba(180,130,90,.05) 28px)",
+                      }}
+                    >
+                      <div
+                        className="absolute -top-2 left-1/2 h-5 w-16 -translate-x-1/2 rounded-sm opacity-95"
+                        style={{ background: TAPE_PATTERN("#d8c4a8") }}
+                      />
+
+                      <div className="mb-3 flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8a6040]">
+                            Chi tiết dự định
+                          </p>
+                          <p className="truncate text-sm font-bold text-[#3a2010]">
+                            {selectedPlan.title}
+                          </p>
+                        </div>
+                        <div className="flex-shrink-0 rounded-full border border-[#d7c3a8] bg-white px-2 py-0.5 text-[10px] font-semibold text-[#6a4a2b]">
+                          {selectedPlan.is_completed ? "Đã xong" : "Đang làm"}
+                        </div>
+                      </div>
+
+                      <div className="mb-3 text-center text-3xl">
+                        {iconFromTitle(selectedPlan.title)}
+                      </div>
+
+                      <input
+                        type="text"
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        className="input-field mb-2 !rounded-xl !border-[#d6c4ac] !bg-white !py-2.5 !text-sm text-[#3a2010]"
+                        disabled={isPending}
+                        aria-label="Tên dự định"
+                        placeholder="Tên dự định"
+                      />
+
+                      <select
+                        value={editingBucket}
+                        onChange={(e) =>
+                          setEditingBucket(e.target.value as PlanBucket)
+                        }
+                        className="input-field mb-2 !rounded-xl !border-[#d6c4ac] !bg-white !py-2.5 !text-sm text-[#3a2010]"
+                        disabled={isPending}
+                        aria-label="Kỳ hạn dự định"
+                      >
+                        {PLAN_BUCKETS.map((item) => (
+                          <option key={item.key} value={item.key}>
+                            {item.key}
+                          </option>
+                        ))}
+                      </select>
+
+                      <textarea
+                        value={editingDescription}
+                        onChange={(e) => setEditingDescription(e.target.value)}
+                        rows={4}
+                        className="input-field mb-3 resize-none !rounded-xl !border-[#d6c4ac] !bg-white !py-2.5 !text-sm text-[#3a2010]"
+                        disabled={isPending}
+                        aria-label="Mô tả dự định"
+                        placeholder="Mô tả dự định"
+                      />
+
+                      <div className="mb-4 rounded-xl border border-[#e1d1ba] bg-white/95 p-2.5 text-[11px] text-[#6b4a2d]">
+                        <p>
+                          ✦ {formatDate(selectedPlan.created_at)} ·{" "}
+                          {monthLabel(selectedPlan.created_at)}
+                        </p>
+                        <p>Thêm bởi {getDisplayName(selectedPlan.added_by)}</p>
+                        <p>
+                          Cập nhật {formatDateTime(selectedPlan.updated_at)}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleCompleted(selectedPlan)}
+                          disabled={isPending}
+                          className="rounded-lg border border-[#d2be9f] bg-[#fffdfa] px-2 py-2.5 text-xs font-semibold text-[#6a4a2b] disabled:opacity-60"
+                        >
+                          {selectedPlan.is_completed
+                            ? "Bỏ hoàn thành"
+                            : "Đánh dấu xong"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleUpdatePlan}
+                          disabled={isPending}
+                          className="rounded-lg border border-[#d2be9f] bg-[#fffdfa] px-2 py-2.5 text-xs font-semibold text-[#6a4a2b] disabled:opacity-60"
+                        >
+                          Lưu chỉnh sửa
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePlan(selectedPlan.id)}
+                          disabled={isPending}
+                          className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-2.5 text-xs font-semibold text-rose-600 disabled:opacity-60"
+                        >
+                          Xóa
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDetailPlanId(null)}
+                          className="rounded-lg border border-[#d2be9f] bg-white px-2 py-2.5 text-xs font-semibold text-[#6a4a2b]"
+                        >
+                          Đóng lại
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })(),
+            document.body,
+          )
+        : null}
     </div>
   );
 }
