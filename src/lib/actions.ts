@@ -237,8 +237,8 @@ async function notifyRoomMembersForNewMemory(
     title: "Kỷ niệm mới vừa được thêm",
     body: `${senderName} vừa thêm: ${memoryTitle}`,
     url: `/friends/${roomId}`,
-    icon: "/icon.svg",
-    badge: "/icon.svg",
+    icon: "/icon-tree-192.png",
+    badge: "/icon-tree-192.png",
   });
 
   await Promise.all(

@@ -345,6 +345,7 @@ export default function RoomClientSection({
           isTwoPerson={isTwoPerson}
           currentUserId={currentUserId}
           hideTree={memoryViewMode !== "tree"}
+          startAtLatestYear={true}
         />
         {memoryViewMode === "list" && (
           <div className="mt-2">
@@ -374,4 +375,3 @@ export default function RoomClientSection({
     </section>
   );
 }
-

@@ -61,6 +61,7 @@ export default function MemoryTree({
   currentUserId,
   hideTree,
   bottomBar,
+  startAtLatestYear,
 }: {
   memories: MemoryRecord[];
   participants?: MemoryParticipant[];
@@ -69,6 +70,7 @@ export default function MemoryTree({
   currentUserId?: string;
   hideTree?: boolean;
   bottomBar?: React.ReactNode;
+  startAtLatestYear?: boolean;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const detailPopupRef = useRef<HTMLDivElement | null>(null);
@@ -292,6 +294,7 @@ export default function MemoryTree({
             svgRef.current = svg;
           }}
           bottomBar={bottomBar}
+          startAtLatestYear={startAtLatestYear}
         />
       </div>
 

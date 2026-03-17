@@ -2,15 +2,21 @@
   "name": "Memory Tree",
   "short_name": "Memory Tree",
   "description": "Grow your memories into a living tree.",
-  "start_url": "/",
+  "start_url": "/friends",
   "display": "standalone",
   "background_color": "#f4ecd8",
   "theme_color": "#f4ecd8",
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon-tree-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-tree-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]

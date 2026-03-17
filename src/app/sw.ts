@@ -34,8 +34,8 @@ self.addEventListener("push", (event) => {
   const fallback = {
     title: "Memory Tree",
     body: "Bạn có kỷ niệm mới.",
-    icon: "/icon.svg",
-    badge: "/icon.svg",
+    icon: "/icon-tree-192.png",
+    badge: "/icon-tree-192.png",
     url: "/",
   };
 

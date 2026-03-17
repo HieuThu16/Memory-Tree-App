@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const tabs = [
   {
-    href: "/",
+    href: "/personal",
     label: "Cá nhân",
     emoji: "🌸",
     icon: (

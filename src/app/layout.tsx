@@ -25,7 +25,8 @@ export const metadata: Metadata = {
   applicationName: "Memory Tree",
   manifest: "/manifest.json",
   icons: {
-    icon: "/icon.svg",
+    icon: "/icon-tree-512.png",
+    apple: "/icon-tree-512.png",
   },
 };
 
