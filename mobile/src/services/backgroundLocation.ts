@@ -63,21 +63,37 @@ export async function configureBackgroundLocation(identity: TrackingIdentity) {
 export async function startBackgroundTracking(identity: TrackingIdentity) {
   await configureBackgroundLocation(identity);
 
-  const currentPosition = await Location.getCurrentPositionAsync({
-    accuracy: Location.Accuracy.Highest,
-  });
+  let currentPosition = await Location.getLastKnownPositionAsync();
+  if (!currentPosition) {
+    try {
+      const positionPromise = Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const timeoutPromise = new Promise<null>((_, reject) =>
+        setTimeout(() => reject(new Error("Location timeout")), 3000)
+      );
+      
+      // @ts-ignore
+      currentPosition = await Promise.race([positionPromise, timeoutPromise]);
+    } catch {
+      // If it times out or fails to quickly grab position, we skip pushing initial coordinate.
+      // Background Location Service will grab it soon enough gracefully via LocationUpdates
+    }
+  }
 
-  await syncLocationPoint(
-    {
-      latitude: currentPosition.coords.latitude,
-      longitude: currentPosition.coords.longitude,
-      accuracy: currentPosition.coords.accuracy ?? null,
-      heading: currentPosition.coords.heading ?? null,
-      speed: currentPosition.coords.speed ?? null,
-      timestamp: currentPosition.timestamp,
-    },
-    identity,
-  );
+  if (currentPosition) {
+    await syncLocationPoint(
+      {
+        latitude: currentPosition.coords.latitude,
+        longitude: currentPosition.coords.longitude,
+        accuracy: currentPosition.coords.accuracy ?? null,
+        heading: currentPosition.coords.heading ?? null,
+        speed: currentPosition.coords.speed ?? null,
+        timestamp: currentPosition.timestamp,
+      },
+      identity,
+    );
+  }
 
   const alreadyStarted =
     await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);

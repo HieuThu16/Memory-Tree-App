@@ -73,76 +73,52 @@ export default function RoomPlaylistManager({
   const [selectedTargetPlaylistId, setSelectedTargetPlaylistId] = useState<
     string | null
   >(null);
-  const [fullTrack, setFullTrack] = useState<{
-    title: string;
-    source: string;
-    embedUrl: string;
-    isAudio: boolean;
-  } | null>(null);
   // Audio state is now global in useMusicStore
 
-  const resolveFullTrackPlayback = (track: {
-    source: string;
-    source_track_id: string;
-    preview_url: string | null;
-    external_url: string | null;
-    title: string;
-  }) => {
-    if (track.source === "youtube") {
-      const id = track.source_track_id;
-      if (!id) return null;
-      return {
-        title: track.title,
-        source: "YouTube",
-        embedUrl: `https://www.youtube.com/embed/${id}?autoplay=1&playsinline=1`,
-        isAudio: false,
-      };
-    }
-
-    if (track.external_url?.includes("soundcloud.com")) {
-      return {
-        title: track.title,
-        source: "SoundCloud",
-        embedUrl: `https://w.soundcloud.com/player/?url=${encodeURIComponent(track.external_url)}&auto_play=true`,
-        isAudio: false,
-      };
+  const resolveFullTrackUrl = (
+    track: MusicSearchResult | PlaylistTrackRecord,
+  ) => {
+    if (track.source === "youtube" && track.source_track_id) {
+      if (track.source_track_id.startsWith("http")) {
+        return `/api/music/play?url=${encodeURIComponent(track.source_track_id)}`;
+      }
+      return `/api/music/play?id=${track.source_track_id}`;
     }
 
     if (track.source === "jamendo" && track.preview_url) {
-      return {
-        title: track.title,
-        source: "Jamendo",
-        embedUrl: track.preview_url,
-        isAudio: true,
-      };
+      return track.preview_url;
     }
 
-    return null;
+    if (track.external_url) {
+      return `/api/music/play?url=${encodeURIComponent(track.external_url)}`;
+    }
+
+    return track.preview_url ?? null;
   };
 
-  const canPlayFullTrack = (track: {
-    source: string;
-    source_track_id: string;
-    preview_url: string | null;
-    external_url: string | null;
-    title: string;
-  }) => Boolean(resolveFullTrackPlayback(track));
+  const canPlayFullTrack = (track: MusicSearchResult | PlaylistTrackRecord) =>
+    Boolean(resolveFullTrackUrl(track));
 
-  const handlePlayFullTrack = (track: {
-    source: string;
-    source_track_id: string;
-    preview_url: string | null;
-    external_url: string | null;
-    title: string;
-  }) => {
-    const resolved = resolveFullTrackPlayback(track);
-    if (!resolved) {
+  const handlePlayFullTrack = (
+    track: MusicSearchResult | PlaylistTrackRecord,
+  ) => {
+    const streamUrl = resolveFullTrackUrl(track);
+    if (!streamUrl) {
       addToast("Bài này chưa có nguồn nghe full phù hợp.", "error");
       return;
     }
 
-    playPreview(null);
-    setFullTrack(resolved);
+    if ("id" in track && track.id) {
+      playTrack({ ...track, preview_url: streamUrl });
+      return;
+    }
+
+    if (playingUrl === streamUrl && !currentTrackId) {
+      playPreview(null);
+      return;
+    }
+
+    playPreview(streamUrl);
   };
 
   useEffect(() => {
@@ -267,15 +243,16 @@ export default function RoomPlaylistManager({
   };
 
   const handlePlayPlaylistTrack = (track: PlaylistTrackRecord) => {
-    if (!track.preview_url) {
+    const streamUrl = resolveFullTrackUrl(track);
+    if (!streamUrl) {
       addToast("Bài này hiện chưa có nguồn phát trực tiếp trong app.", "error");
       return;
     }
-    if (currentTrackId === track.id && playingUrl === track.preview_url) {
+    if (currentTrackId === track.id && playingUrl === streamUrl) {
       playTrack(null);
       return;
     }
-    playTrack(track);
+    playTrack({ ...track, preview_url: streamUrl });
   };
 
   const handlePlayPrevious = () => playPrevious();
@@ -954,49 +931,6 @@ export default function RoomPlaylistManager({
         </div>
       ) : null}
 
-      {fullTrack ? (
-        <div
-          className="fixed inset-0 z-[96] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
-          onClick={() => setFullTrack(null)}
-        >
-          <div
-            className="w-full max-w-2xl rounded-2xl border border-border bg-white p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <p className="truncate text-sm font-semibold text-foreground">
-                🎧 {fullTrack.title}
-              </p>
-              <button
-                type="button"
-                onClick={() => setFullTrack(null)}
-                className="rounded-full border border-border px-3 py-1 text-xs text-text-secondary"
-              >
-                Đóng
-              </button>
-            </div>
-            <p className="mb-2 text-[11px] text-text-muted">
-              Nguồn: {fullTrack.source} (nghe full)
-            </p>
-            {fullTrack.isAudio ? (
-              <audio
-                src={fullTrack.embedUrl}
-                controls
-                autoPlay
-                className="w-full"
-              />
-            ) : (
-              <iframe
-                src={fullTrack.embedUrl}
-                title={`full-track-${fullTrack.source}`}
-                allow="autoplay; encrypted-media; picture-in-picture"
-                allowFullScreen
-                className="h-[360px] w-full rounded-xl border border-border"
-              />
-            )}
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }

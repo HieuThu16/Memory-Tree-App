@@ -1,13 +1,13 @@
-import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Session } from "@supabase/supabase-js";
 import { Platform } from "react-native";
 
 const SESSION_KEY = "memory-tree-mobile-session";
 
 type WebStorageLike = {
-  getItem: (key: string) => string | null;
-  setItem: (key: string, value: string) => void;
-  removeItem: (key: string) => void;
+  getItem: (key: string) => string | null | Promise<string | null>;
+  setItem: (key: string, value: string) => void | Promise<void>;
+  removeItem: (key: string) => void | Promise<void>;
 };
 
 function getWebStorage(): WebStorageLike | null {
@@ -27,27 +27,27 @@ async function getItemAsync(key: string) {
     return webStorage.getItem(key);
   }
 
-  return SecureStore.getItemAsync(key);
+  return AsyncStorage.getItem(key);
 }
 
 async function setItemAsync(key: string, value: string) {
   const webStorage = getWebStorage();
   if (webStorage) {
-    webStorage.setItem(key, value);
+    await webStorage.setItem(key, value);
     return;
   }
 
-  await SecureStore.setItemAsync(key, value);
+  await AsyncStorage.setItem(key, value);
 }
 
 async function removeItemAsync(key: string) {
   const webStorage = getWebStorage();
   if (webStorage) {
-    webStorage.removeItem(key);
+    await webStorage.removeItem(key);
     return;
   }
 
-  await SecureStore.deleteItemAsync(key);
+  await AsyncStorage.removeItem(key);
 }
 
 export const secureSessionStorage = {

@@ -13,6 +13,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { formatCoordinates } from "../services/addressing";
+import type { GlobalFriendshipProfile } from "../services/friendships";
+import { sendFriendRequest, acceptFriendRequest, cancelOrUnfriend } from "../services/friendships";
 
 type Profile = {
   user: User;
@@ -50,10 +52,10 @@ type Profile = {
     userId: string;
     displayName: string;
     avatarUrl: string | null;
-    latitude: number;
-    longitude: number;
+    latitude: number | null;
+    longitude: number | null;
     accuracy: number | null;
-    updatedAt: string;
+    updatedAt: string | null;
     address: string | null;
   }[];
   locationHistory: {
@@ -75,6 +77,7 @@ type Profile = {
   savingLocation: boolean;
   syncing: boolean;
   statusMessage: string | null;
+  globalFriendProfiles: GlobalFriendshipProfile[];
 };
 
 function formatTime(dateString: string | null) {
@@ -106,6 +109,20 @@ function initialsFromName(name: string) {
   );
 }
 
+function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 const PRESET_LOCATION_LABELS = ["Trọ", "Nhà", "Trường"];
 
 type Tab = "personal" | "friends" | "history";
@@ -130,6 +147,8 @@ export default function TrackingStatusScreen({
   const [activeTab, setActiveTab] = useState<Tab>("personal");
   const [locationLabel, setLocationLabel] = useState("");
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+  const [friendSubTab, setFriendSubTab] = useState<"friends"|"requests"|"all">("friends");
+  const [loadingActionId, setLoadingActionId] = useState<string | null>(null);
 
   const primaryRoom = profile.rooms[0] ?? null;
   const initials = initialsFromName(profile.displayName);
@@ -144,10 +163,39 @@ export default function TrackingStatusScreen({
     [primaryRoom, profile.savedLocations],
   );
 
-  const myHistory = useMemo(
-    () => profile.locationHistory.filter((h) => h.userId === profile.user.id),
-    [profile.locationHistory, profile.user.id],
-  );
+  const processedMyHistory = useMemo(() => {
+    const rawHistory = profile.locationHistory.filter((h) => h.userId === profile.user.id);
+    if (!rawHistory || rawHistory.length === 0) return [];
+    
+    const sorted = [...rawHistory].sort((a,b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+    
+    return sorted.map((item, index) => {
+      let prevTime = null;
+      let prevAddress = null;
+      let distanceKm = 0;
+      let isMove = false;
+      
+      if (index > 0) {
+        const prev = sorted[index - 1];
+        prevTime = formatTime(prev.recordedAt);
+        prevAddress = prev.address || `${prev.latitude.toFixed(4)}, ${prev.longitude.toFixed(4)}`;
+        distanceKm = calculateDistanceKm(prev.latitude, prev.longitude, item.latitude, item.longitude);
+        if (distanceKm >= 0.02) { 
+          isMove = true;
+        }
+      }
+      
+      return {
+        id: item.id,
+        time: formatTime(item.recordedAt),
+        address: item.address || `${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}`,
+        prevTime,
+        prevAddress,
+        distanceKm,
+        isMove
+      };
+    }).reverse();
+  }, [profile.locationHistory, profile.user.id]);
 
   const selectedFriend = useMemo(
     () =>
@@ -155,13 +203,40 @@ export default function TrackingStatusScreen({
     [profile.friendLocations, selectedFriendId],
   );
 
-  const selectedFriendHistory = useMemo(
-    () =>
-      selectedFriendId
-        ? profile.locationHistory.filter((h) => h.userId === selectedFriendId)
-        : [],
-    [profile.locationHistory, selectedFriendId],
-  );
+  const processedFriendHistory = useMemo(() => {
+    if (!selectedFriendId) return [];
+    const rawHistory = profile.locationHistory.filter((h) => h.userId === selectedFriendId);
+    if (!rawHistory || rawHistory.length === 0) return [];
+    
+    const sorted = [...rawHistory].sort((a,b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+    
+    return sorted.map((item, index) => {
+      let prevTime = null;
+      let prevAddress = null;
+      let distanceKm = 0;
+      let isMove = false;
+      
+      if (index > 0) {
+        const prev = sorted[index - 1];
+        prevTime = formatTime(prev.recordedAt);
+        prevAddress = prev.address || `${prev.latitude.toFixed(4)}, ${prev.longitude.toFixed(4)}`;
+        distanceKm = calculateDistanceKm(prev.latitude, prev.longitude, item.latitude, item.longitude);
+        if (distanceKm >= 0.02) { 
+          isMove = true;
+        }
+      }
+      
+      return {
+        id: item.id,
+        time: formatTime(item.recordedAt),
+        address: item.address || `${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}`,
+        prevTime,
+        prevAddress,
+        distanceKm,
+        isMove
+      };
+    }).reverse();
+  }, [profile.locationHistory, selectedFriendId]);
 
   const handleSaveCurrentLocation = async () => {
     if (!primaryRoom || !locationLabel.trim()) {
@@ -334,9 +409,8 @@ export default function TrackingStatusScreen({
                   {primaryRoomSavedLocations.map((loc) => (
                     <View key={loc.id} style={styles.savedLocationRow}>
                       <View style={styles.savedLocationContent}>
-                        <Text style={styles.savedLocationLabel}>{loc.label}</Text>
-                        <Text style={styles.savedLocationAddr} numberOfLines={1}>
-                          {loc.address || "Tọa độ: " + loc.latitude.toFixed(4)}
+                        <Text style={styles.savedLocationLabel}>
+                          {loc.label} : <Text style={styles.savedLocationAddr}>{loc.address || "Tọa độ: " + loc.latitude.toFixed(4)}</Text>
                         </Text>
                       </View>
                       {loc.userId === profile.user.id && (
@@ -356,35 +430,126 @@ export default function TrackingStatusScreen({
 
           {activeTab === "friends" && (
             <View style={styles.tabContent}>
-              <Text style={styles.sectionTitle}>Bạn bè trong Room</Text>
-              {profile.friendLocations.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>Chưa có bạn bè nào đang online.</Text>
-                </View>
-              ) : (
-                profile.friendLocations.map((friend) => (
-                  <Pressable
-                    key={friend.userId}
-                    onPress={() => setSelectedFriendId(friend.userId)}
-                    style={styles.friendRow}
-                  >
-                    <View style={styles.friendAvatar}>
-                      <Text style={styles.friendAvatarText}>
-                        {initialsFromName(friend.displayName).toLowerCase()}
-                      </Text>
+              <View style={styles.subTabBar}>
+                 <Pressable onPress={() => setFriendSubTab("friends")} style={[styles.subTab, friendSubTab === "friends" && styles.activeSubTab]}>
+                   <Text style={[styles.subTabText, friendSubTab === "friends" && styles.activeSubTabText]}>Đã kết bạn</Text>
+                 </Pressable>
+                 <Pressable onPress={() => setFriendSubTab("requests")} style={[styles.subTab, friendSubTab === "requests" && styles.activeSubTab]}>
+                   <Text style={[styles.subTabText, friendSubTab === "requests" && styles.activeSubTabText]}>Lời mời</Text>
+                 </Pressable>
+                 <Pressable onPress={() => setFriendSubTab("all")} style={[styles.subTab, friendSubTab === "all" && styles.activeSubTab]}>
+                   <Text style={[styles.subTabText, friendSubTab === "all" && styles.activeSubTabText]}>Mọi người</Text>
+                 </Pressable>
+              </View>
+
+              {friendSubTab === "friends" && (
+                <>
+                  <Text style={styles.sectionTitle}>Danh sách Bạn bè</Text>
+                  {profile.globalFriendProfiles.filter(f => f.status === "accepted").length === 0 ? (
+                    <View style={styles.emptyState}>
+                      <Text style={styles.emptyStateText}>Bạn chưa có bạn bè nào.</Text>
                     </View>
-                    <View style={styles.friendInfo}>
-                      <Text style={styles.friendName}>{friend.displayName}</Text>
-                      <Text style={styles.friendAddr} numberOfLines={1}>
-                        {friend.address || "Đang ở vị trí lạ"}
-                      </Text>
-                      <Text style={styles.subtleMetaText}>
-                        {formatTime(friend.updatedAt)}
-                      </Text>
+                  ) : (
+                    profile.globalFriendProfiles.filter(f => f.status === "accepted").map((friend) => {
+                      const loc = friend.lastLocation;
+                      return (
+                        <Pressable key={friend.userId} onPress={() => setSelectedFriendId(friend.userId)} style={styles.friendRow}>
+                          <View style={styles.friendAvatar}>
+                            <Text style={styles.friendAvatarText}>
+                              {initialsFromName(friend.displayName).toLowerCase()}
+                            </Text>
+                          </View>
+                          <View style={styles.friendInfo}>
+                            <Text style={styles.friendName}>{friend.displayName}</Text>
+                            <Text style={styles.friendAddr} numberOfLines={1}>
+                              {loc?.lat ? (`Vĩ độ: ${loc.lat.toFixed(4)}, Kinh độ: ${loc.lng.toFixed(4)}`) : "Chưa chia sẻ vị trí"}
+                            </Text>
+                            <Text style={styles.subtleMetaText}>{formatTime(loc?.updatedAt || null)}</Text>
+                          </View>
+                          <Pressable 
+                            style={styles.actionBtnSecondary}
+                            onPress={async () => {
+                              if (loadingActionId) return;
+                              setLoadingActionId(friend.id);
+                              await cancelOrUnfriend(friend.id, profile.user.id);
+                              await onRefreshRooms();
+                              setLoadingActionId(null);
+                            }}
+                          >
+                            <Text style={styles.actionBtnTextSecondary}>Hủy</Text>
+                          </Pressable>
+                        </Pressable>
+                      );
+                    })
+                  )}
+                </>
+              )}
+
+              {friendSubTab === "requests" && (
+                <>
+                  <Text style={styles.sectionTitle}>Lời mời đã nhận</Text>
+                  {profile.globalFriendProfiles.filter(f => f.direction === "received" && f.status === "pending").map((friend) => (
+                    <View key={friend.userId} style={styles.friendRow}>
+                       <View style={styles.friendAvatar}><Text style={styles.friendAvatarText}>{initialsFromName(friend.displayName)}</Text></View>
+                       <View style={styles.friendInfo}>
+                         <Text style={styles.friendName}>{friend.displayName}</Text>
+                       </View>
+                       <View style={{flexDirection: 'row', gap: 6}}>
+                         <Pressable style={styles.actionBtnPrimary} onPress={async () => {
+                           if (loadingActionId) return;
+                           setLoadingActionId(friend.id);
+                           await acceptFriendRequest(friend.id, profile.user.id);
+                           await onRefreshRooms();
+                           setLoadingActionId(null);
+                         }}><Text style={styles.actionBtnTextPrimary}>Nhận</Text></Pressable>
+                         <Pressable style={styles.actionBtnSecondary} onPress={async () => {
+                           if (loadingActionId) return;
+                           setLoadingActionId(friend.id);
+                           await cancelOrUnfriend(friend.id, profile.user.id);
+                           await onRefreshRooms();
+                           setLoadingActionId(null);
+                         }}><Text style={styles.actionBtnTextSecondary}>Từ chối</Text></Pressable>
+                       </View>
                     </View>
-                    <Text style={styles.chevron}>›</Text>
-                  </Pressable>
-                ))
+                  ))}
+                  <Text style={[styles.sectionTitle, {marginTop: 10}]}>Lời mời đã gửi</Text>
+                  {profile.globalFriendProfiles.filter(f => f.direction === "sent" && f.status === "pending").map((friend) => (
+                    <View key={friend.userId} style={styles.friendRow}>
+                       <View style={styles.friendAvatar}><Text style={styles.friendAvatarText}>{initialsFromName(friend.displayName)}</Text></View>
+                       <View style={styles.friendInfo}>
+                         <Text style={styles.friendName}>{friend.displayName}</Text>
+                       </View>
+                       <Pressable style={styles.actionBtnSecondary} onPress={async () => {
+                           if (loadingActionId) return;
+                           setLoadingActionId(friend.id);
+                           await cancelOrUnfriend(friend.id, profile.user.id);
+                           await onRefreshRooms();
+                           setLoadingActionId(null);
+                         }}><Text style={styles.actionBtnTextSecondary}>Hủy</Text></Pressable>
+                    </View>
+                  ))}
+                </>
+              )}
+
+              {friendSubTab === "all" && (
+                <>
+                  <Text style={styles.sectionTitle}>Mọi người</Text>
+                  {profile.globalFriendProfiles.filter(f => f.status === "none").map((friend) => (
+                     <View key={friend.userId} style={styles.friendRow}>
+                       <View style={styles.friendAvatar}><Text style={styles.friendAvatarText}>{initialsFromName(friend.displayName)}</Text></View>
+                       <View style={styles.friendInfo}>
+                         <Text style={styles.friendName}>{friend.displayName}</Text>
+                       </View>
+                       <Pressable style={styles.actionBtnPrimary} onPress={async () => {
+                           if (loadingActionId) return;
+                           setLoadingActionId(`add-${friend.userId}`);
+                           await sendFriendRequest(friend.userId, profile.user.id);
+                           await onRefreshRooms();
+                           setLoadingActionId(null);
+                         }}><Text style={styles.actionBtnTextPrimary}>+ Thêm</Text></Pressable>
+                    </View>
+                  ))}
+                </>
               )}
             </View>
           )}
@@ -392,19 +557,27 @@ export default function TrackingStatusScreen({
           {activeTab === "history" && (
             <View style={styles.tabContent}>
               <Text style={styles.sectionTitle}>Lịch sử di chuyển của bạn</Text>
-              {myHistory.length === 0 ? (
+              {processedMyHistory.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyStateText}>Chưa có lịch sử. Hãy di chuyển để bắt đầu ghi!</Text>
                 </View>
               ) : (
-                myHistory.map((item) => (
+                processedMyHistory.map((item) => (
                   <View key={item.id} style={styles.historyRow}>
                     <View style={styles.historyDot} />
                     <View style={styles.historyContent}>
-                      <Text style={styles.historyTime}>{formatTime(item.recordedAt)}</Text>
-                      <Text style={styles.historyAddr}>
-                        {item.latitude.toFixed(5)}, {item.longitude.toFixed(5)}
-                      </Text>
+                      <Text style={styles.historyTimeAddr}>{item.time} : {item.address}</Text>
+                      
+                      {item.isMove && item.prevTime && (
+                        <View style={styles.moveInfoBox}>
+                          <Text style={styles.moveInfoText}>
+                            Từ {item.prevTime} : {item.prevAddress}
+                          </Text>
+                          <Text style={styles.moveDistanceText}>
+                            Quãng đường đi: {item.distanceKm.toFixed(2)} km
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </View>
                 ))
@@ -437,7 +610,7 @@ export default function TrackingStatusScreen({
             <ScrollView contentContainerStyle={styles.modalScroll}>
               <View style={styles.modalSection}>
                 <Text style={styles.modalLabel}>📍 Vị trí hiện tại</Text>
-                <Text style={styles.modalValue}>{selectedFriend?.address || "Không rõ địa chỉ"}</Text>
+                <Text style={styles.modalValue}>{selectedFriend?.latitude === null ? "Chưa bật GPS" : (selectedFriend?.address || "Không rõ địa chỉ")}</Text>
                 <Text style={styles.subtleMetaText}>
                   Cập nhật: {formatTime(selectedFriend?.updatedAt || null)}
                 </Text>
@@ -445,17 +618,25 @@ export default function TrackingStatusScreen({
 
               <View style={styles.modalSection}>
                 <Text style={styles.modalLabel}>🛤️ Lịch sử di chuyển</Text>
-                {selectedFriendHistory.length === 0 ? (
+                {processedFriendHistory.length === 0 ? (
                   <Text style={styles.emptyStateText}>Không có dữ liệu lịch sử.</Text>
                 ) : (
-                  selectedFriendHistory.map((h) => (
-                    <View key={h.id} style={styles.historyRow}>
+                  processedFriendHistory.map((item) => (
+                    <View key={item.id} style={styles.historyRow}>
                       <View style={styles.historyDot} />
                       <View style={styles.historyContent}>
-                        <Text style={styles.historyTime}>{formatTime(h.recordedAt)}</Text>
-                        <Text style={styles.historyAddr}>
-                          {h.latitude.toFixed(5)}, {h.longitude.toFixed(5)}
-                        </Text>
+                        <Text style={styles.historyTimeAddr}>{item.time} : {item.address}</Text>
+                        
+                        {item.isMove && item.prevTime && (
+                          <View style={styles.moveInfoBox}>
+                            <Text style={styles.moveInfoText}>
+                              Từ {item.prevTime} : {item.prevAddress}
+                            </Text>
+                            <Text style={styles.moveDistanceText}>
+                              Quãng đường đi: {item.distanceKm.toFixed(2)} km
+                            </Text>
+                          </View>
+                        )}
                       </View>
                     </View>
                   ))
@@ -525,6 +706,30 @@ const styles = StyleSheet.create({
   },
   activeTabText: {
     color: "#79d8ff",
+  },
+  subTabBar: {
+    flexDirection: "row",
+    backgroundColor: "#10233b",
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 8,
+  },
+  subTab: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: "center",
+    borderRadius: 8,
+  },
+  activeSubTab: {
+    backgroundColor: "#214669",
+  },
+  subTabText: {
+    color: "#6f8898",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  activeSubTabText: {
+    color: "#ecf3fb",
   },
   scrollContent: {
     paddingHorizontal: 18,
@@ -726,7 +931,29 @@ const styles = StyleSheet.create({
   friendName: {
     color: "#ecf3fb",
     fontSize: 16,
-    fontWeight: "800",
+    fontWeight: "700",
+  },
+  actionBtnPrimary: {
+    backgroundColor: "#79d8ff",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  actionBtnSecondary: {
+    backgroundColor: "#214669",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  actionBtnTextPrimary: {
+    color: "#07111f",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  actionBtnTextSecondary: {
+    color: "#ecf3fb",
+    fontSize: 12,
+    fontWeight: "700",
   },
   friendAddr: {
     color: "#a7bfd1",
@@ -759,15 +986,28 @@ const styles = StyleSheet.create({
     marginLeft: -21,
     paddingBottom: 4,
   },
-  historyTime: {
+  historyTimeAddr: {
     color: "#ecf3fb",
     fontSize: 14,
     fontWeight: "700",
+    lineHeight: 20,
   },
-  historyAddr: {
-    color: "#6f8898",
-    fontSize: 12,
-    marginTop: 4,
+  moveInfoBox: {
+    marginTop: 6,
+    backgroundColor: "#17304d",
+    padding: 10,
+    borderRadius: 8,
+  },
+  moveInfoText: {
+    color: "#a7bfd1",
+    fontSize: 13,
+    marginBottom: 4,
+    lineHeight: 18,
+  },
+  moveDistanceText: {
+    color: "#79d8ff",
+    fontSize: 13,
+    fontWeight: "800",
   },
   emptyState: {
     padding: 40,

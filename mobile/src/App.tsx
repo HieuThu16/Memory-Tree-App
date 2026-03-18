@@ -21,6 +21,7 @@ import {
   initializeLocalNotifications,
   notifyFriendLocationUpdate,
 } from "./services/localNotifications";
+import { fetchGlobalFriendships, GlobalFriendshipProfile } from "./services/friendships";
 
 type MobileRoomSummary = {
   id: string;
@@ -79,10 +80,10 @@ type MobileFriendLocation = {
   userId: string;
   displayName: string;
   avatarUrl: string | null;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   accuracy: number | null;
-  updatedAt: string;
+  updatedAt: string | null;
   address: string | null;
 };
 
@@ -106,6 +107,7 @@ type MobileUserContext = {
   savingLocation: boolean;
   syncing: boolean;
   statusMessage: string | null;
+  globalFriendProfiles: GlobalFriendshipProfile[];
 };
 
 type UserLocationRow = {
@@ -161,6 +163,7 @@ export default function App() {
   const [friendLocations, setFriendLocations] = useState<
     MobileFriendLocation[]
   >([]);
+  const [globalFriendProfiles, setGlobalFriendProfiles] = useState<GlobalFriendshipProfile[]>([]);
   const [locationHistory, setLocationHistory] = useState<
     MobileLocationHistory[]
   >([]);
@@ -292,6 +295,7 @@ export default function App() {
         setCurrentLocation(null);
         setSavedLocations([]);
         setFriendLocations([]);
+        setGlobalFriendProfiles([]);
         setProfile((current) => ({ ...current, lastSyncedAt: null }));
         return;
       }
@@ -426,31 +430,36 @@ export default function App() {
       }
 
       const nextFriendLocations = await Promise.all(
-        locationRows
-          .filter((item) => item.user_id !== activeSession.user.id)
-          .map(async (item) => {
-            const memberProfile = memberProfileById.get(item.user_id);
+        memberRows
+          .filter((member) => member.user_id !== activeSession.user.id)
+          .map(async (member) => {
+            const memberProfile = memberProfileById.get(member.user_id);
+            const location = locationRows.find((loc) => loc.user_id === member.user_id && loc.room_id === member.room_id) || locationRows.find((loc) => loc.user_id === member.user_id);
+            
             return {
-              roomId: item.room_id,
-              roomName: roomNameById.get(item.room_id) ?? "Memory Room",
-              userId: item.user_id,
+              roomId: member.room_id,
+              roomName: roomNameById.get(member.room_id) ?? "Memory Room",
+              userId: member.user_id,
               displayName:
                 memberProfile?.displayName ??
-                `Thành viên ${item.user_id.slice(0, 6)}`,
+                `Thành viên ${member.user_id.slice(0, 6)}`,
               avatarUrl: memberProfile?.avatarUrl ?? null,
-              latitude: item.lat,
-              longitude: item.lng,
-              accuracy: item.accuracy ?? null,
-              updatedAt: item.updated_at,
-              address: await reverseGeocodePoint({
-                latitude: item.lat,
-                longitude: item.lng,
-              }),
+              latitude: location?.lat ?? null,
+              longitude: location?.lng ?? null,
+              accuracy: location?.accuracy ?? null,
+              updatedAt: location?.updated_at ?? null,
+              address: location ? await reverseGeocodePoint({
+                latitude: location.lat,
+                longitude: location.lng,
+              }) : null,
             };
           }),
       );
 
       setFriendLocations(nextFriendLocations);
+      const friendsData = await fetchGlobalFriendships(activeSession.user.id);
+      setGlobalFriendProfiles(friendsData);
+
       await Promise.all([
         refreshSavedLocations(uniqueRoomIds),
         refreshLocationHistory(uniqueRoomIds),
@@ -545,6 +554,7 @@ export default function App() {
         setCurrentLocation(null);
         setSavedLocations([]);
         setFriendLocations([]);
+        setGlobalFriendProfiles([]);
         setLatestRealtimeNotice(null);
         setTrackingEnabled(false);
       }
@@ -713,6 +723,7 @@ export default function App() {
       savingLocation,
       syncing,
       statusMessage,
+      globalFriendProfiles,
     };
   }, [
     currentLocation,
@@ -728,6 +739,7 @@ export default function App() {
     statusMessage,
     syncing,
     trackingEnabled,
+    globalFriendProfiles,
   ]);
 
   const handleStart = async () => {
@@ -907,6 +919,7 @@ export default function App() {
               savingLocation: context.savingLocation,
               syncing: context.syncing,
               statusMessage: context.statusMessage,
+              globalFriendProfiles: context.globalFriendProfiles,
             }}
             onStart={handleStart}
             onStop={handleStop}

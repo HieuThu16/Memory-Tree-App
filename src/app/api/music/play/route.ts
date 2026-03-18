@@ -15,12 +15,15 @@ const INVIDIOUS_INSTANCES = [
 ];
 
 const PIPED_INSTANCES = [
-  "https://piped.video",
-  "https://piped.adminforge.de",
-  "https://piped.private.coffee",
-  "https://piped.seitan-ayoub.lol",
-  "https://piped.syncpundit.io",
+  "https://pipedapi.kavin.rocks",
+  "https://pipedapi.adminforge.de",
+  "https://piped-api.garudalinux.org",
 ];
+
+const COBALT_API_BASE =
+  process.env.MUSIC_COBALT_API_BASE ?? "https://api.cobalt.tools/";
+
+const YTDLP_SERVICE_URL = process.env.MUSIC_YTDLP_SERVICE_URL ?? "";
 
 type FallbackAudioFormat = {
   type?: string;
@@ -43,6 +46,48 @@ function shouldPreferMp4(userAgent: string | null) {
   const isSafari = /safari/.test(ua) && !/chrome|chromium|android/.test(ua);
   const isIos = /iphone|ipad|ipod/.test(ua);
   return isSafari || isIos;
+}
+
+function normalizeBaseUrl(base: string) {
+  return base.endsWith("/") ? base : `${base}/`;
+}
+
+function extractYouTubeId(input: string) {
+  try {
+    const parsed = new URL(input);
+    const hostname = parsed.hostname.replace(/^www\./, "");
+
+    if (hostname === "youtu.be") {
+      const id = parsed.pathname.split("/").filter(Boolean)[0];
+      return id || null;
+    }
+
+    if (hostname.endsWith("youtube.com") || hostname.endsWith("youtube-nocookie.com")) {
+      const vParam = parsed.searchParams.get("v");
+      if (vParam) return vParam;
+      const segments = parsed.pathname.split("/").filter(Boolean);
+      if (segments[0] === "embed" || segments[0] === "shorts" || segments[0] === "v") {
+        return segments[1] || null;
+      }
+    }
+  } catch {
+    // ignore malformed URL
+  }
+
+  return null;
+}
+
+function isYouTubeStreamUrl(url: string) {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return (
+      hostname.endsWith("googlevideo.com") ||
+      hostname.endsWith("youtube.com") ||
+      hostname.endsWith("ytimg.com")
+    );
+  } catch {
+    return false;
+  }
 }
 
 function parseBitrate(value: string | number | undefined) {
@@ -166,6 +211,129 @@ async function openExternalFallbackStreamWithoutOrigin(url: string) {
       accept: "*/*",
     },
   });
+}
+
+async function openExternalStreamWithFallback(
+  url: string,
+  preferYouTubeHeaders: boolean,
+) {
+  if (preferYouTubeHeaders) {
+    const withOrigin = await openExternalFallbackStream(url);
+    if (withOrigin.ok && withOrigin.body) return withOrigin;
+    return openExternalFallbackStreamWithoutOrigin(url);
+  }
+
+  const withoutOrigin = await openExternalFallbackStreamWithoutOrigin(url);
+  if (withoutOrigin.ok && withoutOrigin.body) return withoutOrigin;
+  return openExternalFallbackStream(url);
+}
+
+function buildStreamResponse(
+  upstream: Response,
+  contentType: string | null,
+  source: string,
+) {
+  const headers = new Headers({
+    "Content-Type":
+      contentType ?? upstream.headers.get("content-type") ?? "audio/mpeg",
+    "Access-Control-Allow-Origin": "*",
+    "Cache-Control": "public, max-age=600",
+    "X-Content-Type-Options": "nosniff",
+    "X-Music-Source": source,
+  });
+
+  const contentLength = upstream.headers.get("content-length");
+  if (contentLength) {
+    headers.set("Content-Length", contentLength);
+  }
+
+  return new Response(upstream.body, { headers, status: upstream.status });
+}
+
+async function resolveCobaltAudio(
+  url: string,
+): Promise<{ streamUrl: string; contentType: string | null } | null> {
+  try {
+    const response = await fetch(normalizeBaseUrl(COBALT_API_BASE), {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        url,
+        downloadMode: "audio",
+        audioFormat: "best",
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as {
+      status?: string;
+      url?: string;
+      mime?: string;
+      contentType?: string;
+    };
+
+    if (typeof payload.url !== "string" || payload.url.length === 0) {
+      return null;
+    }
+
+    if (payload.status === "error") return null;
+
+    return {
+      streamUrl: resolveAbsoluteUrl(
+        payload.url,
+        normalizeBaseUrl(COBALT_API_BASE),
+      ),
+      contentType:
+        typeof payload.mime === "string"
+          ? payload.mime
+          : typeof payload.contentType === "string"
+            ? payload.contentType
+            : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function resolveYtdlpAudio(
+  url: string,
+): Promise<{ streamUrl: string; contentType: string | null } | null> {
+  if (!YTDLP_SERVICE_URL) return null;
+
+  try {
+    const endpoint = new URL("audio-url", normalizeBaseUrl(YTDLP_SERVICE_URL));
+    endpoint.searchParams.set("video_url", url);
+
+    const response = await fetch(endpoint.toString(), {
+      cache: "no-store",
+    });
+
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as {
+      url?: string;
+      contentType?: string;
+    };
+
+    if (typeof payload.url !== "string" || payload.url.length === 0) {
+      return null;
+    }
+
+    return {
+      streamUrl: resolveAbsoluteUrl(
+        payload.url,
+        normalizeBaseUrl(YTDLP_SERVICE_URL),
+      ),
+      contentType: payload.contentType ?? null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function getInfoWithFallbackClients(videoUrl: string) {
@@ -306,18 +474,119 @@ async function resolvePipedAudio(
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const id = searchParams.get("id");
+  const idParam = searchParams.get("id");
+  const urlParam = searchParams.get("url");
   const userAgent = request.headers.get("user-agent");
   const preferMp4 = shouldPreferMp4(userAgent);
 
-  if (!id) {
-    return Response.json({ error: "Missing id parameter" }, { status: 400 });
+  let youtubeId: string | null = null;
+  let requestedUrl: string | null = null;
+
+  if (idParam) {
+    youtubeId = idParam;
+    requestedUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
+  } else if (urlParam) {
+    try {
+      const parsed = new URL(urlParam);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        return Response.json({ error: "Invalid url parameter" }, { status: 400 });
+      }
+      requestedUrl = parsed.toString();
+    } catch {
+      return Response.json({ error: "Invalid url parameter" }, { status: 400 });
+    }
+
+    youtubeId = extractYouTubeId(requestedUrl);
+    if (youtubeId) {
+      requestedUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
+    }
   }
 
-  const videoUrl = `https://www.youtube.com/watch?v=${id}`;
-  console.log(`[Music Play] Starting stream for video: ${id}`);
+  if (!requestedUrl) {
+    return Response.json(
+      { error: "Missing id or url parameter" },
+      { status: 400 },
+    );
+  }
+
+  console.log(`[Music Play] Starting stream for: ${youtubeId ?? requestedUrl}`);
 
   try {
+    let pipedAttempted = false;
+
+    if (youtubeId) {
+      pipedAttempted = true;
+      const pipedFallback = await resolvePipedAudio(youtubeId, preferMp4);
+      if (pipedFallback) {
+        const pipedResponse = await openExternalStreamWithFallback(
+          pipedFallback.streamUrl,
+          true,
+        );
+
+        if (pipedResponse.ok && pipedResponse.body) {
+          return buildStreamResponse(
+            pipedResponse,
+            pipedFallback.contentType,
+            "piped-api",
+          );
+        }
+
+        console.warn(
+          `[Music Play] Piped API failed with status ${pipedResponse.status} for ${youtubeId}`,
+        );
+      }
+    }
+
+    const cobaltFallback = await resolveCobaltAudio(requestedUrl);
+    if (cobaltFallback) {
+      const preferYouTubeHeaders = isYouTubeStreamUrl(cobaltFallback.streamUrl);
+      const cobaltResponse = await openExternalStreamWithFallback(
+        cobaltFallback.streamUrl,
+        preferYouTubeHeaders,
+      );
+      if (cobaltResponse.ok && cobaltResponse.body) {
+        return buildStreamResponse(
+          cobaltResponse,
+          cobaltFallback.contentType,
+          "cobalt",
+        );
+      }
+
+      console.warn(
+        `[Music Play] Cobalt failed with status ${cobaltResponse.status} for ${requestedUrl}`,
+      );
+    }
+
+    const ytdlpFallback = await resolveYtdlpAudio(requestedUrl);
+    if (ytdlpFallback) {
+      const preferYouTubeHeaders = isYouTubeStreamUrl(ytdlpFallback.streamUrl);
+      const ytdlpResponse = await openExternalStreamWithFallback(
+        ytdlpFallback.streamUrl,
+        preferYouTubeHeaders,
+      );
+
+      if (ytdlpResponse.ok && ytdlpResponse.body) {
+        return buildStreamResponse(
+          ytdlpResponse,
+          ytdlpFallback.contentType,
+          "ytdlp-service",
+        );
+      }
+
+      console.warn(
+        `[Music Play] yt-dlp service failed with status ${ytdlpResponse.status} for ${requestedUrl}`,
+      );
+    }
+
+    if (!youtubeId) {
+      return Response.json(
+        { error: "No playable stream source found" },
+        { status: 422 },
+      );
+    }
+
+    const videoUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
+
     // Validate that the video is available first
     let info;
     try {
@@ -325,10 +594,10 @@ export async function GET(request: Request) {
       console.log(`[Music Play] Got info for: ${info.videoDetails.title}`);
     } catch (infoError) {
       console.error(
-        `[Music Play] Failed to get video info for ${id}:`,
+        `[Music Play] Failed to get video info for ${youtubeId}:`,
         infoError,
       );
-      const fallback = await resolveInvidiousAudio(id, preferMp4);
+      const fallback = await resolveInvidiousAudio(youtubeId, preferMp4);
       if (!fallback) {
         return Response.json(
           {
@@ -339,12 +608,13 @@ export async function GET(request: Request) {
         );
       }
 
-      const fallbackResponse = await openExternalFallbackStream(
+      const fallbackResponse = await openExternalStreamWithFallback(
         fallback.streamUrl,
+        true,
       );
       if (!fallbackResponse.ok || !fallbackResponse.body) {
         console.warn(
-          `[Music Play] Initial Invidious fallback failed: ${fallbackResponse.status} for ${id}`,
+          `[Music Play] Initial Invidious fallback failed: ${fallbackResponse.status} for ${youtubeId}`,
         );
         return Response.json(
           { error: "Could not open fallback audio source" },
@@ -352,23 +622,11 @@ export async function GET(request: Request) {
         );
       }
 
-      const headers = new Headers({
-        "Content-Type":
-          fallback.contentType ??
-          fallbackResponse.headers.get("content-type") ??
-          "audio/mpeg",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "public, max-age=600",
-        "X-Content-Type-Options": "nosniff",
-        "X-Music-Source": "invidious-fallback",
-      });
-
-      const contentLength = fallbackResponse.headers.get("content-length");
-      if (contentLength) {
-        headers.set("Content-Length", contentLength);
-      }
-
-      return new Response(fallbackResponse.body, { headers });
+      return buildStreamResponse(
+        fallbackResponse,
+        fallback.contentType,
+        "invidious-fallback",
+      );
     }
 
     let directCandidates: DirectStreamCandidate[] = [];
@@ -384,7 +642,7 @@ export async function GET(request: Request) {
       ].filter((candidate) => Boolean(candidate.url));
     } catch (formatError) {
       console.error(
-        `[Music Play] Failed selecting ytdl format for ${id}:`,
+        `[Music Play] Failed selecting ytdl format for ${youtubeId}:`,
         formatError,
       );
       directCandidates = collectDirectStreamCandidates(info.formats, preferMp4);
@@ -406,110 +664,69 @@ export async function GET(request: Request) {
         const upstream = await openDirectAudioStream(candidate.url);
         if (!upstream.ok || !upstream.body) {
           console.warn(
-            `[Music Play] Direct stream failed with status ${upstream.status} for ${id}`,
+            `[Music Play] Direct stream failed with status ${upstream.status} for ${youtubeId}`,
           );
           continue;
         }
 
-        const headers = new Headers({
-          "Content-Type":
-            upstream.headers.get("content-type") ?? candidate.contentType,
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "public, max-age=600",
-          "X-Content-Type-Options": "nosniff",
-          "X-Music-Source": "youtube-direct-url",
-        });
-
-        const contentLength = upstream.headers.get("content-length");
-        if (contentLength) {
-          headers.set("Content-Length", contentLength);
-        }
-
-        return new Response(upstream.body, {
-          headers,
-          status: upstream.status,
-        });
+        return buildStreamResponse(
+          upstream,
+          candidate.contentType,
+          "youtube-direct-url",
+        );
       } catch (directStreamError) {
         console.warn(
-          `[Music Play] Direct stream attempt crashed for ${id}:`,
+          `[Music Play] Direct stream attempt crashed for ${youtubeId}:`,
           directStreamError,
         );
       }
     }
 
     console.warn(
-      `[Music Play] All direct YouTube URLs failed for ${id}. Trying Piped/Invidious fallbacks...`,
+      `[Music Play] All direct YouTube URLs failed for ${youtubeId}. Trying Piped/Invidious fallbacks...`,
     );
 
-    const pipedFallback = await resolvePipedAudio(id, preferMp4);
-    if (pipedFallback) {
-      const pipedResponse = await openExternalFallbackStream(
-        pipedFallback.streamUrl,
-      );
+    if (!pipedAttempted) {
+      const pipedFallback = await resolvePipedAudio(youtubeId, preferMp4);
+      if (pipedFallback) {
+        const pipedResponse = await openExternalStreamWithFallback(
+          pipedFallback.streamUrl,
+          true,
+        );
 
-      const pipedResponseNoOrigin =
-        !pipedResponse.ok || !pipedResponse.body
-          ? await openExternalFallbackStreamWithoutOrigin(
-              pipedFallback.streamUrl,
-            )
-          : null;
-
-      const finalPipedResponse =
-        pipedResponse.ok && pipedResponse.body
-          ? pipedResponse
-          : pipedResponseNoOrigin;
-
-      if (finalPipedResponse?.ok && finalPipedResponse.body) {
-        const headers = new Headers({
-          "Content-Type":
-            pipedFallback.contentType ??
-            finalPipedResponse.headers.get("content-type") ??
-            "audio/mpeg",
-          "Access-Control-Allow-Origin": "*",
-          "Cache-Control": "public, max-age=600",
-          "X-Content-Type-Options": "nosniff",
-          "X-Music-Source": "piped-fallback",
-        });
-
-        const contentLength = finalPipedResponse.headers.get("content-length");
-        if (contentLength) {
-          headers.set("Content-Length", contentLength);
+        if (pipedResponse.ok && pipedResponse.body) {
+          return buildStreamResponse(
+            pipedResponse,
+            pipedFallback.contentType,
+            "piped-fallback",
+          );
         }
 
-        return new Response(finalPipedResponse.body, { headers });
+        console.warn(
+          `[Music Play] Piped fallback failed with status ${pipedResponse.status} for ${youtubeId}`,
+        );
+      } else {
+        console.warn(`[Music Play] No Piped stream found for ${youtubeId}`);
       }
-
-      console.warn(
-        `[Music Play] Piped fallback failed with status ${pipedResponse.status} for ${id}`,
-      );
-    } else {
-      console.warn(`[Music Play] No Piped stream found for ${id}`);
     }
 
-    const fallback = await resolveInvidiousAudio(id, preferMp4);
+    const fallback = await resolveInvidiousAudio(youtubeId, preferMp4);
     if (!fallback) {
-      console.warn(`[Music Play] No Invidious stream found for ${id}`);
+      console.warn(`[Music Play] No Invidious stream found for ${youtubeId}`);
       return Response.json(
         { error: "No playable stream source found" },
         { status: 422 },
       );
     }
 
-    const fallbackResponse = await openExternalFallbackStream(
+    const fallbackResponse = await openExternalStreamWithFallback(
       fallback.streamUrl,
+      true,
     );
-    const fallbackResponseNoOrigin =
-      !fallbackResponse.ok || !fallbackResponse.body
-        ? await openExternalFallbackStreamWithoutOrigin(fallback.streamUrl)
-        : null;
-    const finalFallbackResponse =
-      fallbackResponse.ok && fallbackResponse.body
-        ? fallbackResponse
-        : fallbackResponseNoOrigin;
 
-    if (!finalFallbackResponse?.ok || !finalFallbackResponse.body) {
+    if (!fallbackResponse.ok || !fallbackResponse.body) {
       console.warn(
-        `[Music Play] Invidious fallback failed with status ${fallbackResponse.status} for ${id}`,
+        `[Music Play] Invidious fallback failed with status ${fallbackResponse.status} for ${youtubeId}`,
       );
       return Response.json(
         { error: "Could not open fallback audio source" },
@@ -517,25 +734,13 @@ export async function GET(request: Request) {
       );
     }
 
-    const headers = new Headers({
-      "Content-Type":
-        fallback.contentType ??
-        finalFallbackResponse.headers.get("content-type") ??
-        "audio/mpeg",
-      "Access-Control-Allow-Origin": "*",
-      "Cache-Control": "public, max-age=600",
-      "X-Content-Type-Options": "nosniff",
-      "X-Music-Source": "invidious-fallback",
-    });
-
-    const contentLength = finalFallbackResponse.headers.get("content-length");
-    if (contentLength) {
-      headers.set("Content-Length", contentLength);
-    }
-
-    return new Response(finalFallbackResponse.body, { headers });
+    return buildStreamResponse(
+      fallbackResponse,
+      fallback.contentType,
+      "invidious-fallback",
+    );
   } catch (error) {
-    console.error(`[Music Play] YTDL Error for ${id}:`, error);
+    console.error(`[Music Play] YTDL Error for ${youtubeId ?? "unknown"}:`, error);
     return Response.json(
       { error: "Error streaming audio", details: String(error) },
       { status: 500 },

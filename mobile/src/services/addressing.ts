@@ -48,13 +48,19 @@ export async function reverseGeocodePoint(point: GeoPoint) {
   }
 
   try {
-    const results = await Location.reverseGeocodeAsync(point);
-    const formatted =
-      formatAddress(results[0]) ?? `Toa do ${formatCoordinates(point)}`;
+    const geocodePromise = Location.reverseGeocodeAsync(point);
+    const timeoutPromise = new Promise<null>((_, reject) =>
+      setTimeout(() => reject(new Error("Geocode timeout")), 3000)
+    );
+    
+    // @ts-ignore
+    const results = await Promise.race([geocodePromise, timeoutPromise]);
+    
+    const formatted = formatAddress(results ? results[0] : null) ?? `Tọa độ ${formatCoordinates(point)}`;
 
     addressCache.set(cacheKey, formatted);
     return formatted;
   } catch {
-    return `Toa do ${formatCoordinates(point)}`;
+    return `Tọa độ ${formatCoordinates(point)}`;
   }
 }

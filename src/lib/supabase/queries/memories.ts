@@ -49,10 +49,11 @@ async function queryMemoriesWithFallback(params: {
   const applyFilters = (builder: GenericMemoryQuery): GenericMemoryQuery => {
     let scoped = builder;
     if (params.roomId !== undefined) {
-      scoped = scoped.eq("room_id", params.roomId);
-    }
-    if (params.roomId === null) {
-      scoped = scoped.is("room_id", null);
+      if (params.roomId === null) {
+        scoped = scoped.is("room_id", null);
+      } else {
+        scoped = scoped.eq("room_id", params.roomId);
+      }
     }
     if (params.id) {
       scoped = scoped.eq("id", params.id);
