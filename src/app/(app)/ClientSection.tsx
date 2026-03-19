@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useState,
-  useTransition,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import MemoryGallery from "@/components/memory/MemoryGallery";
 import MemoryList from "@/components/memory/MemoryList";
@@ -15,11 +9,10 @@ import type { MemoryRecord } from "@/lib/types";
 import { useMemoryStore } from "@/lib/stores/memoryStore";
 import { useTreeStore } from "@/lib/stores/treeStore";
 
-
 const MemoryMap = dynamic(() => import("@/components/memory/MemoryMap"), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center min-h-[50vh] text-text-muted animate-pulse">
+    <div className="flex min-h-[50vh] items-center justify-center text-text-muted animate-pulse">
       Đang tải bản đồ kỷ niệm...
     </div>
   ),
@@ -37,87 +30,110 @@ export default function ClientSection({
   const scopedMemories = useMemoryStore((s) =>
     s.scopeKey === "personal" ? s.memories : memories,
   );
-  const [isSwitchingView, startSwitchViewTransition] = useTransition();
   const [viewMode, setViewMode] = useState<"tree" | "gallery" | "map" | "list">(
     "tree",
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const deferredSearchQuery = useDeferredValue(searchQuery);
-
-  const handleSwitchViewMode = (
-    nextMode: "tree" | "gallery" | "map" | "list",
-  ) => {
-    if (nextMode === viewMode) return;
-    startSwitchViewTransition(() => {
-      setViewMode(nextMode);
-    });
-  };
 
   useEffect(() => {
     hydrateScope("personal", memories);
   }, [hydrateScope, memories]);
 
+  const sortedMemories = useMemo(
+    () =>
+      [...scopedMemories].sort((a, b) => {
+        const d1 = new Date(a.date || a.created_at).getTime();
+        const d2 = new Date(b.date || b.created_at).getTime();
+        return d2 - d1;
+      }),
+    [scopedMemories],
+  );
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+
   const filteredMemories = useMemo(() => {
-    let result = scopedMemories;
-    if (deferredSearchQuery.trim()) {
-      const lowerQ = deferredSearchQuery.toLowerCase();
-      result = result.filter(
-        (m) =>
-          m.title.toLowerCase().includes(lowerQ) ||
-          (m.category && m.category.toLowerCase().includes(lowerQ)),
-      );
+    if (!normalizedSearchQuery) {
+      return sortedMemories;
     }
-    const sorted = [...result].sort((a, b) => {
-      const d1 = new Date(a.date || a.created_at).getTime();
-      const d2 = new Date(b.date || b.created_at).getTime();
-      return d2 - d1;
-    });
-    return sorted;
-  }, [deferredSearchQuery, scopedMemories]);
+
+    return sortedMemories.filter(
+      (memory) =>
+        memory.title.toLowerCase().includes(normalizedSearchQuery) ||
+        (memory.category &&
+          memory.category.toLowerCase().includes(normalizedSearchQuery)),
+    );
+  }, [normalizedSearchQuery, sortedMemories]);
 
   const isTreeMode = viewMode === "tree";
+
+  const handleOpenMemory = (memory: MemoryRecord) => {
+    useTreeStore.getState().setSelectedId(memory.id);
+    useTreeStore.getState().setIsDetailOpen(true);
+  };
+
+  const renderActiveView = () => {
+    if (viewMode === "tree") {
+      return (
+        <MemoryTree
+          memories={filteredMemories}
+          currentUserId={currentUserId ?? undefined}
+          startAtLatestYear={true}
+        />
+      );
+    }
+
+    if (viewMode === "list") {
+      return (
+        <div className="mt-2">
+          <MemoryList memories={filteredMemories} onSelect={handleOpenMemory} />
+        </div>
+      );
+    }
+
+    if (viewMode === "gallery") {
+      return <MemoryGallery memories={filteredMemories} />;
+    }
+
+    return <MemoryMap memories={filteredMemories} />;
+  };
 
   return (
     <section className="glass-card overflow-hidden rounded-2xl p-2.5 sm:rounded-[30px] sm:p-4">
       <div className="flex flex-col gap-2">
-        {/* Single compact toolbar row */}
         <div className="flex items-center gap-1.5">
-          {/* Memory count */}
           <span className="flex-shrink-0 rounded-full border border-border bg-white/75 px-2.5 py-1 text-[10px] font-semibold text-text-secondary">
-            ???? {filteredMemories.length}/{scopedMemories.length}
+            🌸 {filteredMemories.length}/{scopedMemories.length}
           </span>
 
-          {/* Search ??? only outside tree mode */}
           {viewMode !== "tree" && (
-            <div className="relative flex-1 min-w-0">
+            <div className="relative min-w-0 flex-1">
               <input
                 type="text"
-                placeholder="T??m k??? ni???m..."
+                placeholder="Tìm kỷ niệm..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="input-field w-full !rounded-xl !py-1.5 !pl-7 !text-xs"
               />
-              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted text-xs">
-                ????
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-text-muted">
+                🔍
               </span>
             </div>
           )}
 
           <div className="flex-1" />
 
-          {/* View mode icon buttons */}
-          <div className="flex-shrink-0 flex items-center rounded-xl border border-border bg-white/60 p-0.5 backdrop-blur-sm gap-0.5">
+          <div className="flex flex-shrink-0 items-center gap-0.5 rounded-xl border border-border bg-white/60 p-0.5 backdrop-blur-sm">
             {(
               [
-                { mode: "tree" as const, icon: "????", label: "C??y" },
-                { mode: "list" as const, icon: "????", label: "Danh s??ch" },
-                { mode: "gallery" as const, icon: "???????", label: "Th?? vi???n" },
-                { mode: "map" as const, icon: "???????", label: "B???n ?????" },
+                { mode: "tree" as const, icon: "🌳", label: "Cây" },
+                { mode: "list" as const, icon: "📋", label: "Danh sách" },
+                { mode: "gallery" as const, icon: "🖼️", label: "Thư viện" },
+                { mode: "map" as const, icon: "🗺️", label: "Bản đồ" },
               ] as const
             ).map(({ mode, icon, label }) => (
               <button
                 key={mode}
-                onClick={() => handleSwitchViewMode(mode)}
+                type="button"
+                onClick={() => setViewMode(mode)}
                 className={`rounded-lg px-2 py-1.5 text-xs transition-colors ${
                   viewMode === mode
                     ? "bg-accent text-white shadow-sm"
@@ -130,55 +146,24 @@ export default function ClientSection({
             ))}
           </div>
 
-          {/* Add button */}
           <button
             type="button"
             onClick={() => openCreate()}
-            className="flex-shrink-0 btn-primary rounded-full px-3 py-1.5 text-[10px] whitespace-nowrap"
+            className="btn-primary flex-shrink-0 rounded-full px-3 py-1.5 text-[10px] whitespace-nowrap"
           >
-            + Th??m
+            + Thêm
           </button>
         </div>
       </div>
 
-      {/* Content */}
       <div
         className={`relative ${
           isTreeMode
             ? "mt-1"
-            : "mt-2 rounded-2xl bg-white/58 p-1.5 sm:p-3 min-h-[50vh]"
+            : "mt-2 min-h-[50vh] rounded-2xl bg-white/58 p-1.5 sm:p-3"
         }`}
       >
-        {isSwitchingView ? (
-          <div className="absolute right-3 top-3 z-10 rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] text-text-muted">
-            Đang chuyển tab...
-          </div>
-        ) : null}
-
-        <MemoryTree
-          memories={filteredMemories}
-          currentUserId={currentUserId ?? undefined}
-          hideTree={viewMode !== "tree"}
-          startAtLatestYear={true}
-        />
-
-        {viewMode === "list" && (
-          <div className="mt-2">
-            <MemoryList
-              memories={filteredMemories}
-              onSelect={(m) => {
-                useTreeStore.getState().setSelectedId(m.id);
-                useTreeStore.getState().setIsDetailOpen(true);
-              }}
-            />
-          </div>
-        )}
-
-        {viewMode === "gallery" && (
-          <MemoryGallery memories={filteredMemories} />
-        )}
-
-        {viewMode === "map" && <MemoryMap memories={filteredMemories} />}
+        {renderActiveView()}
       </div>
     </section>
   );

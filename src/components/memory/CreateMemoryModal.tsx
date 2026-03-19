@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useMemo, useTransition } from "react";
 import { MEMORY_SELECT } from "@/lib/supabase/selects";
 import { useMemoryStore } from "@/lib/stores/memoryStore";
 import { useTreeStore } from "@/lib/stores/treeStore";
@@ -101,12 +101,15 @@ function FlowerConceptPreview({ concept }: { concept: number }) {
 }
 
 export default function CreateMemoryModal() {
-  const { isCreateOpen, closeCreate, targetRoomId, editingMemory } =
-    useTreeStore();
+  const isCreateOpen = useTreeStore((s) => s.isCreateOpen);
+  const closeCreate = useTreeStore((s) => s.closeCreate);
+  const targetRoomId = useTreeStore((s) => s.targetRoomId);
+  const editingMemory = useTreeStore((s) => s.editingMemory);
   const addToast = useUiStore((s) => s.addToast);
   const upsertMemory = useMemoryStore((s) => s.upsertMemory);
   const prependHistory = useMemoryStore((s) => s.prependHistory);
   const isEditing = !!editingMemory;
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -155,13 +158,11 @@ export default function CreateMemoryModal() {
   };
 
   const getMediaUrl = (path: string) => {
-    return createSupabaseBrowserClient()
-      .storage.from("media")
-      .getPublicUrl(path).data.publicUrl;
+    return supabase.storage.from("media").getPublicUrl(path).data.publicUrl;
   };
 
   const fetchLatestMemory = async (memoryId: string) => {
-    const { data } = await createSupabaseBrowserClient()
+    const { data } = await supabase
       .from("memories")
       .select(MEMORY_SELECT)
       .eq("id", memoryId)
@@ -256,7 +257,6 @@ export default function CreateMemoryModal() {
   const uploadFiles = async (memoryId: string, authorId: string) => {
     if (files.length === 0) return { success: true };
 
-    const supabase = createSupabaseBrowserClient();
     const mediaItems: {
       memory_id: string;
       storage_path: string;
@@ -335,8 +335,7 @@ export default function CreateMemoryModal() {
         if (result.error) {
           addToast(result.error, "error");
         } else {
-          const user = (await createSupabaseBrowserClient().auth.getUser()).data
-            .user;
+          const user = (await supabase.auth.getUser()).data.user;
           if (user && files.length > 0) {
             const uploadResult = await uploadFiles(editingMemory.id, user.id);
             if (!uploadResult.success) {
@@ -381,8 +380,7 @@ export default function CreateMemoryModal() {
         if (result.error) {
           addToast(result.error, "error");
         } else if (result.data?.memory) {
-          const user = (await createSupabaseBrowserClient().auth.getUser()).data
-            .user;
+          const user = (await supabase.auth.getUser()).data.user;
           if (user && files.length > 0) {
             const uploadResult = await uploadFiles(
               result.data.memory.id,

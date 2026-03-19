@@ -1,6 +1,7 @@
 "use client";
 
-import type { MemoryRecord, MemoryParticipant } from "@/lib/types";
+import { useMemo } from "react";
+import type { MemoryParticipant, MemoryRecord } from "@/lib/types";
 import { useTreeStore } from "@/lib/stores/treeStore";
 import { getParticipantAppearance } from "@/lib/memberAppearance";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -14,11 +15,10 @@ export default function MemoryGallery({
 }) {
   const setSelectedId = useTreeStore((s) => s.setSelectedId);
   const setIsDetailOpen = useTreeStore((s) => s.setIsDetailOpen);
-  const supabase = createSupabaseBrowserClient();
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
 
-  const getMediaUrl = (path: string) => {
-    return supabase.storage.from("media").getPublicUrl(path).data.publicUrl;
-  };
+  const getMediaUrl = (path: string) =>
+    supabase.storage.from("media").getPublicUrl(path).data.publicUrl;
 
   const handleOpenMemory = (id: string) => {
     setSelectedId(id);
@@ -29,13 +29,13 @@ export default function MemoryGallery({
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center text-text-muted">
         <span className="text-4xl">🍃</span>
-        <p className="mt-2 text-sm">Chưa có kỉ niệm / ảnh nào...</p>
+        <p className="mt-2 text-sm">Chưa có kỷ niệm / ảnh nào...</p>
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 p-1">
+    <div className="grid grid-cols-2 gap-2 p-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
       {memories.map((memory) => {
         const coverMedia = memory.media?.[0];
         const owner = participantsByUserId?.get(memory.user_id);
@@ -47,7 +47,6 @@ export default function MemoryGallery({
             onClick={() => handleOpenMemory(memory.id)}
             className="group relative aspect-[4/5] cursor-pointer overflow-hidden rounded-xl border border-white bg-white/40 shadow-sm transition-all hover:scale-[1.02] hover:shadow-md"
           >
-            {/* Background Media or Fallback Gradient */}
             {coverMedia ? (
               coverMedia.media_type === "video" ? (
                 <video
@@ -64,8 +63,8 @@ export default function MemoryGallery({
                 />
               )
             ) : (
-              <div className="flex h-full flex-col items-center justify-center p-3 text-center bg-gradient-to-br from-white to-orange-50/50">
-                <span className="text-3xl mb-1 drop-shadow-sm">
+              <div className="flex h-full flex-col items-center justify-center bg-gradient-to-br from-white to-orange-50/50 p-3 text-center">
+                <span className="mb-1 text-3xl drop-shadow-sm">
                   {memory.category === "✈️"
                     ? "✈️"
                     : memory.category === "🎂"
@@ -75,7 +74,6 @@ export default function MemoryGallery({
               </div>
             )}
 
-            {/* Content Overlay */}
             <div
               className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-2 pt-6 text-white transition-opacity ${
                 coverMedia ? "opacity-0 group-hover:opacity-100" : "opacity-100"
@@ -96,7 +94,6 @@ export default function MemoryGallery({
               </p>
             </div>
 
-            {/* Participant Avatar */}
             {appearance && (
               <div
                 className="absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-white text-[7px] font-bold shadow-sm"
@@ -110,9 +107,8 @@ export default function MemoryGallery({
               </div>
             )}
 
-            {/* Multiple media indicator */}
             {memory.media && memory.media.length > 1 && (
-              <div className="absolute right-1.5 top-1.5 rounded-md bg-black/50 px-1.5 py-0.5 text-[8px] font-semibold tracking-wider text-white backdrop-blur shadow-sm">
+              <div className="absolute right-1.5 top-1.5 rounded-md bg-black/50 px-1.5 py-0.5 text-[8px] font-semibold tracking-wider text-white shadow-sm backdrop-blur">
                 +{memory.media.length - 1} 📷
               </div>
             )}

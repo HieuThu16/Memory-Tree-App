@@ -40,6 +40,22 @@ type PushError = {
   statusCode?: number;
 };
 
+type MemoryMutationRecord = {
+  id: string;
+  user_id: string;
+  room_id: string | null;
+  parent_id: string | null;
+  title: string;
+  content: string | null;
+  category: string | null;
+  with_whom: string | null;
+  event_time: string | null;
+  location: string | null;
+  date: string | null;
+  type: MemoryRecord["type"];
+  created_at: string;
+};
+
 const isMissingMetadataColumn = (message?: string) => {
   if (!message) return false;
   const lowered = message.toLowerCase();
@@ -98,19 +114,43 @@ async function getMemoryForMutation(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   memoryId: string,
 ) {
+  const primarySelect =
+    "id, user_id, room_id, parent_id, title, content, category, with_whom, event_time, location, date, type, created_at";
+  const legacySelect =
+    "id, user_id, room_id, parent_id, title, content, category, location, date, type, created_at";
+
   const { data, error } = await supabase
     .from("memories")
-    .select(
-      "id, user_id, room_id, parent_id, title, content, category, with_whom, event_time, location, date, type, created_at",
-    )
+    .select(primarySelect)
     .eq("id", memoryId)
     .single();
 
-  if (error || !data) {
+  if (!error && data) {
+    return data as MemoryMutationRecord;
+  }
+
+  if (!isMissingMetadataColumn(error?.message)) {
     return null;
   }
 
-  return data;
+  const legacyResult = await supabase
+    .from("memories")
+    .select(legacySelect)
+    .eq("id", memoryId)
+    .single();
+
+  if (legacyResult.error || !legacyResult.data) {
+    return null;
+  }
+
+  return {
+    ...(legacyResult.data as Omit<
+      MemoryMutationRecord,
+      "with_whom" | "event_time"
+    >),
+    with_whom: null,
+    event_time: null,
+  };
 }
 
 async function canEditMemory(
@@ -136,13 +176,35 @@ async function getFullMemoryRecord(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
   memoryId: string,
 ) {
-  const { data } = await supabase
+  const primaryResult = await supabase
     .from("memories")
     .select(MEMORY_SELECT)
     .eq("id", memoryId)
     .single();
 
-  return data ?? null;
+  if (!primaryResult.error && primaryResult.data) {
+    return primaryResult.data as MemoryRecord;
+  }
+
+  if (!isMissingMetadataColumn(primaryResult.error?.message)) {
+    return null;
+  }
+
+  const legacyResult = await supabase
+    .from("memories")
+    .select(MEMORY_SELECT_LEGACY)
+    .eq("id", memoryId)
+    .single();
+
+  if (legacyResult.error || !legacyResult.data) {
+    return null;
+  }
+
+  return {
+    ...(legacyResult.data as Omit<MemoryRecord, "with_whom" | "event_time">),
+    with_whom: null,
+    event_time: null,
+  };
 }
 
 function formatComparableValue(value: unknown) {

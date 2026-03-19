@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { MemoryRecord } from "@/lib/types";
 
@@ -184,12 +184,10 @@ const getDelayClass = (seed: number) => `anim-d-${seed % 10}`;
 
 function YearTreeSvg({
   bucket,
-  selectedMonth,
   onSelectMonth,
   registerExportSvg,
 }: {
   bucket: YearBucket;
-  selectedMonth: number | null;
   onSelectMonth: (month: number) => void;
   registerExportSvg: (svg: SVGSVGElement | null) => void;
 }) {
@@ -234,11 +232,9 @@ function YearTreeSvg({
 
       {MONTH_NODES.map((monthNode, monthIndex) => {
         const count = bucket.months.get(monthNode.m)?.length ?? 0;
-        const isSelected = selectedMonth === monthNode.m;
         const iconSrc = getYearIconForMonth(monthNode.m);
         const theme = getYearThemeForMonth(monthNode.m);
-        const iconSize = isSelected ? 112 : 96;
-        const iconOpacity = 1;
+        const iconSize = 96;
         const countFill = count > 0 ? theme.text : "rgba(90,90,90,0.55)";
         const sx =
           spreadCenter.x + (monthNode.x - spreadCenter.x) * spreadScale;
@@ -260,7 +256,6 @@ function YearTreeSvg({
               y={sy - iconSize / 2}
               width={iconSize}
               height={iconSize}
-              opacity={iconOpacity}
               preserveAspectRatio="xMidYMid meet"
               style={{ filter: FLOWER_FILTER }}
             />
@@ -318,6 +313,34 @@ function MonthMemorySvg({
   const cy = 220;
   const circlesCount = memories.length;
   const circleSlots = Math.min(12, Math.max(6, circlesCount));
+  const laidOutMemories = useMemo(
+    () =>
+      memories.map((memory, index) => {
+        const ring = Math.floor(index / circleSlots);
+        const slot = index % circleSlots;
+        const angle =
+          (slot * 2 * Math.PI) / circleSlots -
+          Math.PI / 2 +
+          (ring * Math.PI) / circleSlots;
+        const radius = 120 + ring * 30;
+        const fx = cx + Math.cos(angle) * radius;
+        const fy = cy + Math.sin(angle) * radius;
+        const iconSeed = getMemoryIconSeed(memory);
+        const seed = hashString(iconSeed);
+
+        return {
+          memory,
+          fx,
+          fy,
+          iconSrc: getMonthIconForSeed(iconSeed),
+          iconSize: selectedMemoryId === memory.id ? 72 : 60,
+          baseDelayClass: getDelayClass(index + seed),
+          rotation: (seed % 12) - 6,
+          animationDelay: `${(index % 12) * 0.05}s`,
+        };
+      }),
+    [circleSlots, cx, cy, memories, selectedMemoryId],
+  );
 
   return (
     <svg
@@ -334,10 +357,18 @@ function MonthMemorySvg({
           transform-origin: center;
           animation: memoryEnter .7s cubic-bezier(.34, 1.56, .64, 1) forwards;
         }
+        .month-card-enter {
+          opacity: 0;
+          transform: translateY(12px) scale(0.96);
+          animation: monthCardEnter .34s ease forwards;
+        }
         @keyframes memoryEnter {
           0% { opacity: 0; transform: scale(0) rotate(-25deg); filter: blur(6px); }
           60% { opacity: 1; transform: scale(1.15) rotate(5deg); filter: blur(0px); }
           100% { opacity: 1; transform: scale(1) rotate(0deg); }
+        }
+        @keyframes monthCardEnter {
+          to { opacity: 1; transform: translateY(0) scale(1); }
         }
 
         .month-icon {
@@ -382,36 +413,23 @@ function MonthMemorySvg({
         preserveAspectRatio="xMidYMid meet"
       />
 
-      {memories.map((memory, index) => {
-        const ring = Math.floor(index / circleSlots);
-        const slot = index % circleSlots;
-        const angle =
-          (slot * 2 * Math.PI) / circleSlots -
-          Math.PI / 2 +
-          (ring * Math.PI) / circleSlots;
-        const radius = 120 + ring * 30;
-        const fx = cx + Math.cos(angle) * radius;
-        const fy = cy + Math.sin(angle) * radius;
-        const isSelected = selectedMemoryId === memory.id;
-        const iconSeed = getMemoryIconSeed(memory);
-        const seed = hashString(iconSeed);
-        const iconSrc = getMonthIconForSeed(iconSeed);
-        const baseDelayClass = getDelayClass(index + seed);
-        const iconSize = isSelected ? 72 : 60;
-        const rotation = (seed % 12) - 6;
-        return (
-          <motion.g
+      {laidOutMemories.map(
+        ({
+          memory,
+          fx,
+          fy,
+          iconSrc,
+          iconSize,
+          baseDelayClass,
+          rotation,
+          animationDelay,
+        }) => (
+          <g
             key={memory.id}
-            initial={{ scale: 0, opacity: 0, rotate: -20 }}
-            animate={{ scale: 1, opacity: 1, rotate: 0 }}
-            transition={{
-              type: "spring",
-              stiffness: 260,
-              damping: 20,
-              delay: (index % 12) * 0.05,
-            }}
             onClick={() => onMemoryClick(memory.id)}
             cursor="pointer"
+            className="memory-enter"
+            style={{ animationDelay }}
           >
             <image
               href={iconSrc}
@@ -424,9 +442,9 @@ function MonthMemorySvg({
               transform={`rotate(${rotation} ${fx} ${fy})`}
               style={{ filter: FLOWER_FILTER }}
             />
-          </motion.g>
-        );
-      })}
+          </g>
+        ),
+      )}
 
       <text
         x={150}
@@ -479,20 +497,12 @@ export default function FlowerTreeCanvas({
       }));
   }, [memories]);
 
-  const didInitLatestRef = useRef(false);
-  const [activeYearIndex, setActiveYearIndex] = useState(0);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [activeYearIndex, setActiveYearIndex] = useState(() =>
+    startAtLatestYear ? Math.max(0, yearBuckets.length - 1) : 0,
+  );
   const [activeMonth, setActiveMonth] = useState<number | null>(null);
   const [direction, setDirection] = useState(0);
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [touchStartY, setTouchStartY] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!startAtLatestYear) return;
-    if (didInitLatestRef.current) return;
-    if (!yearBuckets.length) return;
-    setActiveYearIndex(Math.max(0, yearBuckets.length - 1));
-    didInitLatestRef.current = true;
-  }, [startAtLatestYear, yearBuckets.length]);
 
   const goPrevYear = () => {
     setDirection(-1);
@@ -618,19 +628,21 @@ export default function FlowerTreeCanvas({
         onTouchStart={(event) => {
           if (activeMonth) return; // lock swipe when in month view
           const touch = event.changedTouches[0];
-          setTouchStartX(touch?.clientX ?? null);
-          setTouchStartY(touch?.clientY ?? null);
+          if (!touch) return;
+          touchStartRef.current = {
+            x: touch.clientX,
+            y: touch.clientY,
+          };
         }}
         onTouchEnd={(event) => {
           if (activeMonth) return; // lock swipe when in month view
-          if (touchStartX === null || touchStartY === null) return;
+          if (!touchStartRef.current) return;
           const touch = event.changedTouches[0];
-          const endX = touch?.clientX ?? touchStartX;
-          const endY = touch?.clientY ?? touchStartY;
-          const deltaX = endX - touchStartX;
-          const deltaY = endY - touchStartY;
-          setTouchStartX(null);
-          setTouchStartY(null);
+          if (!touch) return;
+          const { x: startX, y: startY } = touchStartRef.current;
+          const deltaX = touch.clientX - startX;
+          const deltaY = touch.clientY - startY;
+          touchStartRef.current = null;
           // Only treat as horizontal swipe if X movement dominates
           if (Math.abs(deltaX) < 42) return;
           if (Math.abs(deltaY) > Math.abs(deltaX) * 0.7) return; // mostly vertical
@@ -680,20 +692,20 @@ export default function FlowerTreeCanvas({
 
                   {activeMonthMemories.length > 0 && (
                     <div className="mt-6 grid grid-cols-2 gap-3 pb-2">
-                      {activeMonthMemories.map((m) => {
+                      {activeMonthMemories.map((m, index) => {
                         const badgeBg = activeMonthTheme.badge;
                         const iconSrc = getMonthIconForSeed(
                           getMemoryIconSeed(m),
                         );
                         return (
-                          <motion.button
+                          <button
                             key={m.id}
-                            initial={{ opacity: 0, y: 15 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            whileHover={{ scale: 1.05, y: -2 }}
-                            whileTap={{ scale: 0.95 }}
+                            type="button"
                             onClick={() => onMemoryClick(m.id)}
-                            className="flex items-center gap-3 rounded-2xl border border-emerald-500/10 bg-white/50 p-3 text-left backdrop-blur-lg hover:bg-white/70 transition-all shadow-md"
+                            className="month-card-enter flex items-center gap-3 rounded-2xl border border-emerald-500/10 bg-white/50 p-3 text-left shadow-md backdrop-blur-lg transition-all hover:-translate-y-0.5 hover:bg-white/70 hover:shadow-lg"
+                            style={{
+                              animationDelay: `${(index % 12) * 0.04}s`,
+                            }}
                           >
                             <div
                               className={`flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl border text-xl shadow-sm ${badgeBg}`}
@@ -714,7 +726,7 @@ export default function FlowerTreeCanvas({
                                 {formatExactDate(m)}
                               </p>
                             </div>
-                          </motion.button>
+                          </button>
                         );
                       })}
                     </div>
@@ -724,7 +736,6 @@ export default function FlowerTreeCanvas({
                 <div className="w-full py-4">
                   <YearTreeSvg
                     bucket={activeYear!}
-                    selectedMonth={activeMonth}
                     onSelectMonth={setActiveMonth}
                     registerExportSvg={onExportSvgChange}
                   />

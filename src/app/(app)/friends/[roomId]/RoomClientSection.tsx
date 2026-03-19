@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useState,
-  useTransition,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import MemoryTree from "@/components/tree/MemoryTree";
 import MemoryGallery from "@/components/memory/MemoryGallery";
@@ -29,7 +23,7 @@ function urlBase64ToUint8Array(base64String: string) {
 const MemoryMap = dynamic(() => import("@/components/memory/MemoryMap"), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center min-h-[50vh] text-text-muted animate-pulse">
+    <div className="flex min-h-[50vh] items-center justify-center text-text-muted animate-pulse">
       Đang tải bản đồ kỷ niệm...
     </div>
   ),
@@ -65,21 +59,10 @@ export default function RoomClientSection({
   );
 
   const isTwoPerson = participants.length === 2;
-  const [isSwitchingView, startSwitchViewTransition] = useTransition();
   const [memoryViewMode, setMemoryViewMode] = useState<
     "tree" | "gallery" | "map" | "list"
   >("tree");
   const [searchQuery, setSearchQuery] = useState("");
-  const deferredSearchQuery = useDeferredValue(searchQuery);
-
-  const handleSwitchViewMode = (
-    nextMode: "tree" | "gallery" | "map" | "list",
-  ) => {
-    if (nextMode === memoryViewMode) return;
-    startSwitchViewTransition(() => {
-      setMemoryViewMode(nextMode);
-    });
-  };
 
   useEffect(() => {
     hydrateScope(`room:${roomId}`, memories);
@@ -159,7 +142,7 @@ export default function RoomClientSection({
             const partnerName =
               participantsByUserId.get(inserted.user_id)?.displayName ??
               "Người ấy";
-            addToast(`${partnerName} vừa thêm kỉ niệm mới 🌸`, "info");
+            addToast(`${partnerName} vừa thêm kỷ niệm mới 🌸`, "info");
           }
         },
       )
@@ -214,75 +197,99 @@ export default function RoomClientSection({
     upsertMemory,
   ]);
 
+  const sortedMemories = useMemo(
+    () =>
+      [...scopedMemories].sort((a, b) => {
+        const d1 = new Date(a.date || a.created_at).getTime();
+        const d2 = new Date(b.date || b.created_at).getTime();
+        return d2 - d1;
+      }),
+    [scopedMemories],
+  );
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+
   const filteredMemories = useMemo(() => {
-    let result = scopedMemories;
-    if (deferredSearchQuery.trim()) {
-      const lowerQ = deferredSearchQuery.toLowerCase();
-      result = result.filter(
-        (m) =>
-          m.title.toLowerCase().includes(lowerQ) ||
-          (m.category && m.category.toLowerCase().includes(lowerQ)),
-      );
-    }
-    // Sort from newest to oldest
-    const sorted = [...result].sort((a, b) => {
-      const d1 = new Date(a.date || a.created_at).getTime();
-      const d2 = new Date(b.date || b.created_at).getTime();
-      return d2 - d1;
-    });
-    return sorted;
-  }, [deferredSearchQuery, scopedMemories]);
-
-  useEffect(() => {
-    if (process.env.NODE_ENV === "production") return;
-
-    const startedAt = performance.now();
-    let result = scopedMemories;
-    if (deferredSearchQuery.trim()) {
-      const lowerQ = deferredSearchQuery.toLowerCase();
-      result = result.filter(
-        (m) =>
-          m.title.toLowerCase().includes(lowerQ) ||
-          (m.category && m.category.toLowerCase().includes(lowerQ)),
-      );
+    if (!normalizedSearchQuery) {
+      return sortedMemories;
     }
 
-    const sorted = [...result].sort((a, b) => {
-      const d1 = new Date(a.date || a.created_at).getTime();
-      const d2 = new Date(b.date || b.created_at).getTime();
-      return d2 - d1;
-    });
-
-    console.log(
-      `[Perf][RoomClientSection] filter+sort=${(performance.now() - startedAt).toFixed(2)}ms (query='${deferredSearchQuery}', total=${scopedMemories.length}, visible=${sorted.length})`,
+    return sortedMemories.filter(
+      (memory) =>
+        memory.title.toLowerCase().includes(normalizedSearchQuery) ||
+        (memory.category &&
+          memory.category.toLowerCase().includes(normalizedSearchQuery)),
     );
-  }, [deferredSearchQuery, scopedMemories]);
+  }, [normalizedSearchQuery, sortedMemories]);
+
+  const handleOpenMemory = (memory: MemoryRecord) => {
+    useTreeStore.getState().setSelectedId(memory.id);
+    useTreeStore.getState().setIsDetailOpen(true);
+  };
+
+  const renderActiveView = () => {
+    if (memoryViewMode === "tree") {
+      return (
+        <MemoryTree
+          memories={filteredMemories}
+          participants={participants}
+          participantsByUserId={participantsByUserId}
+          isTwoPerson={isTwoPerson}
+          currentUserId={currentUserId}
+          startAtLatestYear={true}
+        />
+      );
+    }
+
+    if (memoryViewMode === "list") {
+      return (
+        <div className="mt-2">
+          <MemoryList
+            memories={filteredMemories}
+            participantsByUserId={participantsByUserId}
+            onSelect={handleOpenMemory}
+          />
+        </div>
+      );
+    }
+
+    if (memoryViewMode === "gallery") {
+      return (
+        <MemoryGallery
+          memories={filteredMemories}
+          participantsByUserId={participantsByUserId}
+        />
+      );
+    }
+
+    return (
+      <MemoryMap
+        memories={filteredMemories}
+        participantsByUserId={participantsByUserId}
+      />
+    );
+  };
 
   return (
     <section className="glass-card overflow-hidden rounded-2xl p-2.5 sm:rounded-[30px] sm:p-4">
       <div className="flex flex-col gap-2">
-        {/* Single compact toolbar row */}
         <div className="flex items-center gap-1.5">
-          {/* Participant count */}
           <span className="flex-shrink-0 rounded-full bg-accent px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">
             👥 {participants.length}/2
           </span>
-          {/* Memory count */}
           <span className="flex-shrink-0 rounded-full border border-border bg-white/75 px-2.5 py-1 text-[10px] font-semibold text-text-secondary">
             🌸 {filteredMemories.length}/{scopedMemories.length}
           </span>
 
-          {/* Search — only outside tree mode */}
           {memoryViewMode !== "tree" && (
-            <div className="relative flex-1 min-w-0">
+            <div className="relative min-w-0 flex-1">
               <input
                 type="text"
-                placeholder="Tìm kỉ niệm chung..."
+                placeholder="Tìm kỷ niệm chung..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="input-field w-full !rounded-xl !py-1.5 !pl-7 !text-xs"
               />
-              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted text-xs">
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-text-muted">
                 🔍
               </span>
             </div>
@@ -290,8 +297,7 @@ export default function RoomClientSection({
 
           <div className="flex-1" />
 
-          {/* View toggle */}
-          <div className="flex-shrink-0 flex items-center rounded-xl border border-border bg-white/60 p-0.5 backdrop-blur-sm gap-0.5">
+          <div className="flex flex-shrink-0 items-center gap-0.5 rounded-xl border border-border bg-white/60 p-0.5 backdrop-blur-sm">
             {(
               [
                 { mode: "tree" as const, icon: "🌳" },
@@ -302,7 +308,8 @@ export default function RoomClientSection({
             ).map(({ mode, icon }) => (
               <button
                 key={mode}
-                onClick={() => handleSwitchViewMode(mode)}
+                type="button"
+                onClick={() => setMemoryViewMode(mode)}
                 className={`rounded-lg px-2 py-1.5 text-xs transition-colors ${
                   memoryViewMode === mode
                     ? "bg-accent text-white shadow-sm"
@@ -314,63 +321,24 @@ export default function RoomClientSection({
             ))}
           </div>
 
-          {/* Add button */}
           <button
             type="button"
             onClick={() => openCreate(roomId)}
-            className="flex-shrink-0 btn-primary rounded-full px-3 py-1.5 text-[10px] whitespace-nowrap"
+            className="btn-primary flex-shrink-0 rounded-full px-3 py-1.5 text-[10px] whitespace-nowrap"
           >
             + Góp 🌱
           </button>
         </div>
       </div>
 
-      {/* Content */}
       <div
         className={`relative ${
           memoryViewMode === "tree"
             ? "mt-1"
-            : "mt-2 rounded-2xl bg-white/58 p-1.5 sm:p-3 min-h-[50vh]"
+            : "mt-2 min-h-[50vh] rounded-2xl bg-white/58 p-1.5 sm:p-3"
         }`}
       >
-        {isSwitchingView ? (
-          <div className="absolute right-3 top-3 z-10 rounded-full border border-border bg-white/80 px-2 py-1 text-[10px] text-text-muted">
-            Đang chuyển tab...
-          </div>
-        ) : null}
-        <MemoryTree
-          memories={filteredMemories}
-          participants={participants}
-          participantsByUserId={participantsByUserId}
-          isTwoPerson={isTwoPerson}
-          currentUserId={currentUserId}
-          hideTree={memoryViewMode !== "tree"}
-          startAtLatestYear={true}
-        />
-        {memoryViewMode === "list" && (
-          <div className="mt-2">
-            <MemoryList
-              memories={filteredMemories}
-              participantsByUserId={participantsByUserId}
-              onSelect={(m) => {
-                useTreeStore.getState().setSelectedId(m.id);
-                useTreeStore.getState().setIsDetailOpen(true);
-              }}
-            />
-          </div>
-        )}
-        {memoryViewMode === "gallery" && (
-          <MemoryGallery
-            memories={filteredMemories}
-            participantsByUserId={participantsByUserId}
-          />
-        )}
-        {memoryViewMode === "map" && (
-          <MemoryMap
-            memories={filteredMemories}
-            participantsByUserId={participantsByUserId}
-          />
-        )}
+        {renderActiveView()}
       </div>
     </section>
   );
