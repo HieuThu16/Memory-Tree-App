@@ -93,9 +93,40 @@ export default function GlobalMiniPlayer() {
     ? playlistTracks.find((t) => t.id === currentTrackId)
     : null;
 
-  if (!playingUrl) {
-    return null;
-  }
+  // Sync to Media Session API for lock screen controls & background play
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) {
+      return;
+    }
+
+    if (currentTrack) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title,
+        artist: currentTrack.artist || "Memory Tree",
+        album: currentTrack.album || "Khu vườn kỉ niệm",
+        artwork: currentTrack.artwork_url ? [
+          { src: currentTrack.artwork_url, sizes: "512x512", type: "image/png" },
+        ] : [
+          { src: "/icon-tree-512.png", sizes: "512x512", type: "image/png" },
+        ],
+      });
+
+      navigator.mediaSession.setActionHandler("play", () => {
+        audioRef.current?.play().catch(console.error);
+      });
+      navigator.mediaSession.setActionHandler("pause", () => {
+        audioRef.current?.pause();
+      });
+      navigator.mediaSession.setActionHandler("previoustrack", () => {
+        playPrevious();
+      });
+      navigator.mediaSession.setActionHandler("nexttrack", () => {
+        playNext();
+      });
+    }
+
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+  }, [currentTrack, isPlaying, playNext, playPrevious]);
 
   const togglePlayPause = () => {
     const audio = audioRef.current;
@@ -107,6 +138,10 @@ export default function GlobalMiniPlayer() {
       audio.pause();
     }
   };
+
+  if (!playingUrl) {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-24 sm:bottom-24 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-24px)] max-w-sm">

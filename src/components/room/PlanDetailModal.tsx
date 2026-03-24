@@ -106,7 +106,7 @@ export default function PlanDetailModal({
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#704627]">
                 Chi tiết dự định
               </p>
-              <p className="truncate text-sm font-bold text-[#2f180c]">
+              <p className="text-sm font-bold text-[#2f180c] whitespace-normal break-words">
                 {plan.title}
               </p>
             </div>

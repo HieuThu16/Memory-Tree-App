@@ -35,7 +35,7 @@ export default function PlansRoomList({ rooms }: { rooms: RoomListItem[] }) {
             className="glass-card flex items-center justify-between rounded-2xl p-4 text-left transition hover:translate-y-[-1px] disabled:opacity-70"
           >
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-foreground">
+              <p className="text-sm font-semibold text-foreground whitespace-normal break-words">
                 {room.name || "Phòng chung"}
               </p>
               <p className="mt-1 text-xs text-text-secondary">

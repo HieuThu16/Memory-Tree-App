@@ -114,7 +114,7 @@ export default function MemoryCard({
             </span>
             {/* Avatar removed as per request */}
           </div>
-          <h3 className="mt-1.5 truncate text-sm font-semibold text-foreground transition-colors group-hover:text-accent">
+          <h3 className="mt-1.5 text-sm font-semibold text-foreground transition-colors group-hover:text-accent whitespace-normal break-words">
             {memory.title}
           </h3>
           {memory.content && (

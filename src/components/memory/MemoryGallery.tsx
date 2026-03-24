@@ -79,7 +79,7 @@ export default function MemoryGallery({
                 coverMedia ? "opacity-0 group-hover:opacity-100" : "opacity-100"
               }`}
             >
-              <p className="truncate text-[11px] font-semibold tracking-wide drop-shadow-md">
+              <p className="text-[11px] font-semibold tracking-wide drop-shadow-md whitespace-normal break-words">
                 {memory.title}
               </p>
               {memory.category ? (

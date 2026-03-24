@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import play from "play-dl";
 import ytSearch from "yt-search";
 import type { MusicSearchResult } from "@/lib/types";
 
@@ -11,26 +12,21 @@ const trendingCache = new Map<
   string,
   { data: MusicSearchResult[]; ts: number }
 >();
-const CACHE_TTL = 15 * 60 * 1000; // 15 minutes for trending
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes for trending
 
 function normalizeJamendoTrack(
-  track: Record<string, unknown>,
+  track: any,
 ): MusicSearchResult {
-  const title = String(track.name ?? "Unknown track");
-  const artist =
-    typeof track.artist_name === "string" ? track.artist_name : null;
   return {
     source: "jamendo",
     source_track_id: String(track.id ?? ""),
-    title,
-    artist,
-    album: typeof track.album_name === "string" ? track.album_name : null,
-    artwork_url:
-      typeof track.album_image === "string" ? track.album_image : null,
-    preview_url: typeof track.audio === "string" ? track.audio : null,
-    external_url: typeof track.shareurl === "string" ? track.shareurl : null,
-    duration_ms:
-      typeof track.duration === "number" ? track.duration * 1000 : null,
+    title: track.name ?? "Unknown track",
+    artist: track.artist_name ?? null,
+    album: track.album_name ?? null,
+    artwork_url: track.album_image ?? null,
+    preview_url: track.audio ?? null,
+    external_url: track.shareurl ?? null,
+    duration_ms: (track.duration ?? 0) * 1000,
   };
 }
 
@@ -48,7 +44,7 @@ export async function GET(request: Request) {
   const country = resolveCountry(searchParams.get("country"));
 
   // Check cache
-  const cacheKey = `trending:${country}`;
+  const cacheKey = `trending:v3:${country}`;
   const cached = trendingCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < CACHE_TTL) {
     return NextResponse.json({
@@ -58,70 +54,65 @@ export async function GET(request: Request) {
   }
 
   const queryMap: Record<string, string[]> = {
-    vn: [
-      "nhạc hot việt nam mới nhất official MV",
-      "top bài hát hay nhất 2025 việt nam",
-    ],
-    us: [
-      "top billboard hot 100 official music video",
-      "trending music usa 2025",
-    ],
-    kr: ["top kpop songs 2025 official MV", "trending kpop music video new"],
-    jp: ["top jpop songs 2025 official", "trending japanese music 2025 MV"],
-    gb: ["UK top charts 2025 official music video", "trending UK music 2025"],
+    vn: ["trending music việt nam mới nhất official audio 2025"],
+    us: ["Billboard Hot 100 This Week official audio"],
+    kr: ["Top Kpop Songs 2025 official audio"],
+    jp: ["Top J-Pop hits 2025 new official"],
+    gb: ["UK Top 40 Singles Chart new official MV"],
   };
 
   try {
-    const jamendoResult = await fetch(
-      "https://api.jamendo.com/v3.0/tracks/?client_id=b6747d04&format=json&limit=24&order=popularity_total_desc&audioformat=mp32",
-      { next: { revalidate: 900 } },
-    );
-
+    // 1. Load Jamendo (Always free & high quality)
     let jamendoTracks: MusicSearchResult[] = [];
-    if (jamendoResult.ok) {
-      const jamendoPayload = (await jamendoResult.json()) as {
-        results?: Record<string, unknown>[];
-      };
-      jamendoTracks = (jamendoPayload.results ?? []).map(normalizeJamendoTrack);
+    try {
+      const jamendoResult = await fetch(
+        "https://api.jamendo.com/v3.0/tracks/?client_id=b6747d04&format=json&limit=20&order=popularity_total_desc&audioformat=mp32",
+        { next: { revalidate: 3600 } }
+      );
+      if (jamendoResult.ok) {
+        const payload = await jamendoResult.json();
+        jamendoTracks = (payload.results ?? []).map(normalizeJamendoTrack);
+      }
+    } catch (e) { console.warn("Jamendo fetch failed"); }
+
+    // 2. Load YouTube Trends via yt-search (more stable than play-dl search)
+    const queries = queryMap[country] || ["trending music official 2025"];
+    
+    // Using simple loop for stability
+    let ytData: MusicSearchResult[] = [];
+    for (const q of queries) {
+      try {
+        const r = await ytSearch(q);
+        const videos = r.videos.slice(0, 25).map((v) => ({
+          source: "youtube",
+          source_track_id: v.videoId,
+          title: v.title,
+          artist: v.author.name,
+          album: null,
+          artwork_url: v.thumbnail ?? null,
+          preview_url: `/api/music/play?id=${v.videoId}`,
+          external_url: v.url,
+          duration_ms: v.seconds * 1000,
+        }));
+        ytData = [...ytData, ...videos];
+      } catch (err) {
+        console.error(`yt-search failed for ${q}`, err);
+      }
     }
 
-    const queries = queryMap[country] || ["trending music official 2025"];
-
-    // Parallel search for multiple queries for richer results
-    const results = await Promise.allSettled(queries.map((q) => ytSearch(q)));
-
-    const allVideos = results.flatMap((r) =>
-      r.status === "fulfilled" ? r.value.videos : [],
-    );
-
-    const data: MusicSearchResult[] = allVideos.map((v) => ({
-      source: "youtube",
-      source_track_id: v.videoId,
-      title: v.title,
-      artist: v.author.name,
-      album: null,
-      artwork_url: v.thumbnail ?? null,
-      preview_url: `/api/music/play?id=${v.videoId}`,
-      external_url: v.url,
-      duration_ms: v.seconds * 1000,
-    }));
-
-    // Deduplicate by videoId
+    // Deduplicate and combine
+    const combined = [...ytData, ...jamendoTracks];
     const deduped = Array.from(
       new Map(
-        [...jamendoTracks, ...data].map((item) => [
-          `${item.source}:${item.source_track_id}`,
-          item,
-        ]),
+        combined.map((item) => [`${item.source}:${item.source_track_id}`, item]),
       ).values(),
-    ).slice(0, 40); // Return up to 40 results
+    ).slice(0, 50);
 
-    // Cache the results
     trendingCache.set(cacheKey, { data: deduped, ts: Date.now() });
 
     return NextResponse.json({ data: deduped, meta: { country } });
   } catch (error) {
-    console.error("YTSearch Trending Error:", error);
-    return NextResponse.json({ data: [], meta: { country } }, { status: 500 });
+    console.error("Trending API Error:", error);
+    return NextResponse.json({ data: [], error: String(error) }, { status: 500 });
   }
 }

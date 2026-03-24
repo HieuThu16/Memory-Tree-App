@@ -587,7 +587,7 @@ export default function RoomCountdownBoard({
           <div className="flex h-full flex-col">
             <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
               <BackButton onClick={() => setDetailId(null)} />
-              <p className="truncate text-sm font-semibold text-foreground">
+              <p className="text-sm font-semibold text-foreground whitespace-normal break-words">
                 {selectedCountdown.emoji} Chi tiết đếm ngược
               </p>
               <button

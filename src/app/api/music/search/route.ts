@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import play from "play-dl";
 import ytSearch from "yt-search";
 import type { MusicSearchResult } from "@/lib/types";
 
@@ -9,8 +10,8 @@ const searchCache = new Map<
   string,
   { data: MusicSearchResult[]; ts: number }
 >();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const MAX_CACHE_SIZE = 50;
+const CACHE_TTL = 10 * 60 * 1000;
+const MAX_CACHE_SIZE = 100;
 
 function getCached(key: string): MusicSearchResult[] | null {
   const entry = searchCache.get(key);
@@ -23,7 +24,6 @@ function getCached(key: string): MusicSearchResult[] | null {
 }
 
 function setCache(key: string, data: MusicSearchResult[]) {
-  // Simple LRU eviction
   if (searchCache.size >= MAX_CACHE_SIZE) {
     const firstKey = searchCache.keys().next().value;
     if (firstKey) searchCache.delete(firstKey);
@@ -39,24 +39,17 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: [] });
   }
 
-  // Check cache first
-  const cacheKey = `search:${query.toLowerCase()}`;
+  const cacheKey = `search:v3:${query.toLowerCase()}`;
   const cached = getCached(cacheKey);
   if (cached) {
     return NextResponse.json({ data: cached, meta: { cached: true } });
   }
 
   try {
-    // Search with music-specific keywords for better results
-    const musicQuery =
-      query.includes("official") ||
-      query.includes("MV") ||
-      query.includes("audio")
-        ? query
-        : `${query} official audio`;
-
-    const r = await ytSearch(musicQuery);
-    const videos = r.videos.slice(0, 30);
+    // 1. YouTube Search (using yt-search for guaranteed stability)
+    const ytQuery = query.includes("official") ? query : `${query} official audio`;
+    const r = await ytSearch(ytQuery);
+    const videos = r.videos.slice(0, 25);
 
     const data: MusicSearchResult[] = videos.map((v) => ({
       source: "youtube",
@@ -70,10 +63,13 @@ export async function GET(request: Request) {
       duration_ms: v.seconds * 1000,
     }));
 
-    // Deduplicate by videoId
+    // SoundCloud search is currently unstable, skipping for now
+    const combined = [...data];
+    
+    // Deduplicate
     const deduped = Array.from(
       new Map(
-        data.map((item) => [`${item.source}:${item.source_track_id}`, item]),
+        combined.map((item) => [`${item.source}:${item.source_track_id}`, item]),
       ).values(),
     );
 
@@ -81,7 +77,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ data: deduped });
   } catch (error) {
-    console.error("YTSearch Error:", error);
-    return NextResponse.json({ data: [] }, { status: 500 });
+    console.error("Music Search Error:", error);
+    return NextResponse.json({ data: [], error: String(error) }, { status: 500 });
   }
 }

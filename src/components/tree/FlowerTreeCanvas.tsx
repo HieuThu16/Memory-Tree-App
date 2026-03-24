@@ -136,6 +136,16 @@ const MONTH_NODES = [
   { m: 12, sid: 4, x: 198, y: 208 },
 ] as const;
 
+const MEMORIES_CANOPY_SLOTS = [
+  { x: 180, y: 52 }, { x: 130, y: 64 }, { x: 230, y: 64 }, { x: 90, y: 92 }, { x: 270, y: 92 },
+  { x: 180, y: 96 }, { x: 138, y: 108 }, { x: 222, y: 108 }, { x: 85, y: 142 }, { x: 275, y: 142 },
+  { x: 155, y: 138 }, { x: 205, y: 138 }, { x: 115, y: 168 }, { x: 245, y: 168 }, { x: 180, y: 175 },
+  { x: 65, y: 172 }, { x: 295, y: 172 }, { x: 102, y: 205 }, { x: 258, y: 205 }, { x: 180, y: 218 },
+  { x: 135, y: 235 }, { x: 225, y: 235 }, { x: 80, y: 220 }, { x: 280, y: 220 }, { x: 180, y: 132 },
+  { x: 158, y: 88 }, { x: 202, y: 88 }, { x: 118, y: 132 }, { x: 242, y: 132 }, { x: 195, y: 174 },
+  { x: 138, y: 188 }, { x: 222, y: 188 }, { x: 105, y: 248 }, { x: 255, y: 248 }, { x: 180, y: 265 }
+] as const;
+
 const toSafeDate = (value?: string | null) => {
   if (!value) return null;
   const parsed = new Date(value);
@@ -310,30 +320,35 @@ function MonthMemorySvg({
   const monthTheme = getMonthThemeForMonth(month);
   const treeIconSrc = getMonthTreeIconForMonth(month);
   const cx = 180;
-  const cy = 220;
+  const cy = 190;
   const circlesCount = memories.length;
   const circleSlots = Math.min(12, Math.max(6, circlesCount));
   const laidOutMemories = useMemo(
     () =>
       memories.map((memory, index) => {
-        const ring = Math.floor(index / circleSlots);
-        const slot = index % circleSlots;
-        const angle =
-          (slot * 2 * Math.PI) / circleSlots -
-          Math.PI / 2 +
-          (ring * Math.PI) / circleSlots;
-        const radius = 120 + ring * 30;
-        const fx = cx + Math.cos(angle) * radius;
-        const fy = cy + Math.sin(angle) * radius;
+        const count = memories.length;
+        const baseSize = count > 20 ? 36 : count > 12 ? 42 : count > 6 ? 48 : 54;
+        
+        const slotIdx = index % MEMORIES_CANOPY_SLOTS.length;
+        const ring = Math.floor(index / MEMORIES_CANOPY_SLOTS.length);
+        const slot = MEMORIES_CANOPY_SLOTS[slotIdx];
+
         const iconSeed = getMemoryIconSeed(memory);
         const seed = hashString(iconSeed);
+
+        // Thêm độ lệch nhẹ (jitter) nếu có nhiều hoa trùng ô hoặc để trông tự nhiên hơn
+        const jitterX = ring > 0 ? (seed % 30 - 15) * ring : (seed % 10 - 5);
+        const jitterY = ring > 0 ? (seed % 30 - 15) * ring : (seed % 10 - 5);
+          
+        const fx = slot.x + jitterX;
+        const fy = slot.y + jitterY;
 
         return {
           memory,
           fx,
           fy,
           iconSrc: getMonthIconForSeed(iconSeed),
-          iconSize: selectedMemoryId === memory.id ? 72 : 60,
+          iconSize: selectedMemoryId === memory.id ? baseSize * 1.25 : baseSize,
           baseDelayClass: getDelayClass(index + seed),
           rotation: (seed % 12) - 6,
           animationDelay: `${(index % 12) * 0.05}s`,
@@ -719,7 +734,7 @@ export default function FlowerTreeCanvas({
                               />
                             </div>
                             <div className="min-w-0">
-                              <p className="truncate text-[12px] font-black text-emerald-900 leading-tight">
+                              <p className="text-[12px] font-black text-emerald-900 leading-tight whitespace-normal break-words">
                                 {m.title}
                               </p>
                               <p className="text-[10px] font-medium text-emerald-700/60">
