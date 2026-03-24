@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Fraunces, Space_Grotesk } from "next/font/google";
 import QueryProvider from "@/components/providers/QueryProvider";
 import Toasts from "@/components/ui/Toasts";
-import GlobalMiniPlayer from "@/components/music/GlobalMiniPlayer";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -47,7 +46,6 @@ export default function RootLayout({
       >
         <QueryProvider>
           {children}
-          <GlobalMiniPlayer />
           <Toasts />
         </QueryProvider>
       </body>

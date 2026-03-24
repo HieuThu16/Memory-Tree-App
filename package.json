@@ -20,7 +20,6 @@
     "deploy-prod": "vercel deploy --prod --yes --build-env NEXT_PUBLIC_SUPABASE_URL=https://xhgpxtuzocqqqgsdfqig.supabase.co --build-env NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_5EExnaFkAHKHEEcwrHF3tg_adJeIbiW --env NEXT_PUBLIC_SUPABASE_URL=https://xhgpxtuzocqqqgsdfqig.supabase.co --env NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_5EExnaFkAHKHEEcwrHF3tg_adJeIbiW"
   },
   "dependencies": {
-    "@distube/ytdl-core": "^4.16.12",
     "@serwist/next": "^9.5.6",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.99.0",
@@ -32,7 +31,6 @@
     "leaflet": "^1.9.4",
     "nanoid": "^5.1.6",
     "next": "16.1.6",
-    "play-dl": "^1.9.7",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-dropzone": "^14.4.1",
@@ -40,8 +38,6 @@
     "react-zoom-pan-pinch": "^3.7.0",
     "serwist": "^9.5.6",
     "web-push": "^3.6.7",
-    "youtubei.js": "^17.0.1",
-    "yt-search": "^2.13.1",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
@@ -51,7 +47,6 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
-    "@types/yt-search": "^2.10.3",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
