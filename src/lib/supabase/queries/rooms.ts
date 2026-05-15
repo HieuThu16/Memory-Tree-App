@@ -1,4 +1,5 @@
 import type { MemoryParticipant, RoomRecord, RoomSummary } from "@/lib/types";
+import { cache } from "react";
 import { createSupabaseServerClient } from "../server";
 
 type ProfileLookupRecord = {
@@ -54,7 +55,7 @@ async function getActiveInviteCodesByRoomIds(
   return new Map((data ?? []).map((invite) => [invite.room_id, invite.code]));
 }
 
-export async function getUserRooms(): Promise<RoomSummary[]> {
+const getUserRoomsUncached = async (): Promise<RoomSummary[]> => {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -87,42 +88,63 @@ export async function getUserRooms(): Promise<RoomSummary[]> {
     return [];
   }
 
-  const results = await Promise.all(
-    (rooms ?? []).map(async (room) => {
-      const { data: membersInfo } = await supabase
-        .from("room_members")
-        .select("user_id")
-        .eq("room_id", room.id);
+  const { data: allMembers, error: allMembersError } = await supabase
+    .from("room_members")
+    .select("room_id, user_id")
+    .in("room_id", roomIds);
 
-      const memberUserIds = (membersInfo ?? []).map((member) => member.user_id);
-      const profilesById = await getProfilesByIds(memberUserIds);
+  if (allMembersError) {
+    console.error("Failed to load room members", allMembersError.message);
+    return [];
+  }
 
-      const count = membersInfo?.length ?? 0;
+  const memberRows = (allMembers ?? []) as Array<{ room_id: string; user_id: string }>;
+  const membersByRoomId = new Map<string, Array<{ user_id: string }>>();
 
-      const otherMembers = (membersInfo ?? [])
-        .filter((m) => m.user_id !== user.id)
-        .map((m) => {
-          return profilesById.get(m.user_id)?.display_name || "Khách ẩn danh";
-        });
+  for (const member of memberRows) {
+    const existing = membersByRoomId.get(member.room_id);
+    if (existing) {
+      existing.push({ user_id: member.user_id });
+    } else {
+      membersByRoomId.set(member.room_id, [{ user_id: member.user_id }]);
+    }
+  }
 
-      const sharedMemberCount = (membersInfo ?? []).filter(
-        (member) => member.user_id !== room.created_by,
-      ).length;
+  const uniqueMemberUserIds = [...new Set(memberRows.map((member) => member.user_id))];
+  const profilesById = await getProfilesByIds(uniqueMemberUserIds);
 
-      return {
-        ...room,
-        invite_code: inviteCodesByRoomId.get(room.id) ?? null,
-        member_count: count,
-        other_members: otherMembers,
-        shared_member_count: sharedMemberCount,
-        is_shared: sharedMemberCount > 0,
-        invite_only: sharedMemberCount === 0,
-      };
-    }),
-  );
+  const results = (rooms ?? []).map((room) => {
+    const membersInfo = membersByRoomId.get(room.id) ?? [];
+    const count = membersInfo.length;
+
+    const otherMembers = membersInfo
+      .filter((member) => member.user_id !== user.id)
+      .map((member) => profilesById.get(member.user_id)?.display_name || "Khách ẩn danh");
+
+    const sharedMemberCount = membersInfo.filter(
+      (member) => member.user_id !== room.created_by,
+    ).length;
+
+    return {
+      ...room,
+      invite_code: inviteCodesByRoomId.get(room.id) ?? null,
+      member_count: count,
+      other_members: otherMembers,
+      shared_member_count: sharedMemberCount,
+      is_shared: sharedMemberCount > 0,
+      invite_only: sharedMemberCount === 0,
+    };
+  });
 
   return results;
-}
+};
+
+export const getUserRooms = cache(getUserRoomsUncached);
+
+export const getLatestUserRoomId = cache(async (): Promise<string | null> => {
+  const rooms = await getUserRooms();
+  return rooms[0]?.id ?? null;
+});
 
 export async function getRoomByInviteCode(
   code: string,
@@ -174,7 +196,7 @@ export async function getRoomInviteCode(
   return data?.code ?? null;
 }
 
-export async function getCurrentUser() {
+const getCurrentUserUncached = async () => {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -194,7 +216,9 @@ export async function getCurrentUser() {
       profile?.display_name ?? user.user_metadata?.full_name ?? "Memory Keeper",
     avatarUrl: profile?.avatar_url ?? user.user_metadata?.avatar_url ?? null,
   };
-}
+};
+
+export const getCurrentUser = cache(getCurrentUserUncached);
 
 export async function getRoomParticipants(
   roomId: string,

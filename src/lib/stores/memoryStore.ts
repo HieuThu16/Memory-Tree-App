@@ -3,6 +3,23 @@
 import { create } from "zustand";
 import type { MemoryEditHistoryRecord, MemoryRecord } from "@/lib/types";
 
+const buildMemorySignature = (memories: MemoryRecord[]) =>
+  memories
+    .map(
+      (memory) =>
+        [
+          memory.id,
+          memory.title,
+          memory.content ?? "",
+          memory.category ?? "",
+          memory.location ?? "",
+          memory.with_whom ?? "",
+          memory.event_time ?? "",
+          memory.media?.length ?? -1,
+        ].join(":"),
+    )
+    .join("|");
+
 type MemoryStoreState = {
   scopeKey: string | null;
   memories: MemoryRecord[];
@@ -24,10 +41,10 @@ export const useMemoryStore = create<MemoryStoreState>()((set) => ({
   hydrateScope: (scopeKey, memories) =>
     set((state) => {
       if (state.scopeKey === scopeKey) {
-        const currentIds = state.memories.map((memory) => memory.id).join("|");
-        const nextIds = memories.map((memory) => memory.id).join("|");
+        const currentSignature = buildMemorySignature(state.memories);
+        const nextSignature = buildMemorySignature(memories);
 
-        if (currentIds === nextIds) {
+        if (currentSignature === nextSignature) {
           return state;
         }
       }

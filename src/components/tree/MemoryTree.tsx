@@ -60,8 +60,8 @@ export default function MemoryTree({
   participantsByUserId,
   currentUserId,
   hideTree,
-  bottomBar,
-  startAtLatestYear,
+  roomId,
+  onAddMemory,
 }: {
   memories: MemoryRecord[];
   participants?: MemoryParticipant[];
@@ -69,8 +69,8 @@ export default function MemoryTree({
   isTwoPerson?: boolean;
   currentUserId?: string;
   hideTree?: boolean;
-  bottomBar?: React.ReactNode;
-  startAtLatestYear?: boolean;
+  roomId: string;
+  onAddMemory?: () => void;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const detailPopupRef = useRef<HTMLDivElement | null>(null);
@@ -268,21 +268,8 @@ export default function MemoryTree({
   );
 
   return (
-    <div className="w-full">
-      <style>{`
-        @keyframes sakuraFadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes sakuraFloat {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-4px); }
-        }
-        .sakura-float {
-          animation: sakuraFloat 3.8s ease-in-out infinite;
-        }
-      `}</style>
-      <div className={hideTree ? "hidden" : "w-full"}>
+    <div className="w-full h-full">
+      <div className={hideTree ? "hidden" : "w-full h-full"}>
         <FlowerTreeCanvas
           memories={memories}
           selectedMemoryId={selectedId}
@@ -293,8 +280,8 @@ export default function MemoryTree({
           onExportSvgChange={(svg) => {
             svgRef.current = svg;
           }}
-          bottomBar={bottomBar}
-          startAtLatestYear={startAtLatestYear}
+          roomId={roomId}
+          onAddMemory={onAddMemory}
         />
       </div>
 

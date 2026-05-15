@@ -9,18 +9,22 @@ import { concept07Flowers } from "./concept07";
 import { concept08Flowers } from "./concept08";
 import { concept09Flowers } from "./concept09";
 import { concept10Flowers } from "./concept10";
+import { concept11Flowers } from "./concept11";
+import { concept12Flowers } from "./concept12";
 
 export const FLOWER_CONCEPT_LABELS = [
-  "Cột mốc",
-  "Cột mốc lần 1",
-  "Cột mốc lần 2",
-  "Gia đình",
-  "Tình yêu",
-  "Bạn bè",
-  "Du lịch",
-  "Sinh nhật",
-  "Công việc",
-  "Thường ngày",
+  "Tháng 1",
+  "Tháng 2",
+  "Tháng 3",
+  "Tháng 4",
+  "Tháng 5",
+  "Tháng 6",
+  "Tháng 7",
+  "Tháng 8",
+  "Tháng 9",
+  "Tháng 10",
+  "Tháng 11",
+  "Tháng 12",
 ] as const;
 
 const FLOWER_CATEGORY_TO_CONCEPT = new Map<string, number>(
@@ -34,7 +38,7 @@ export const resolveFlowerConceptFromCategory = (category?: string | null) => {
 
 export const normalizeFlowerConcept = (concept?: number | null) => {
   if (!concept || Number.isNaN(concept)) return 1;
-  return ((Math.floor(concept) - 1 + 10) % 10) + 1;
+  return ((Math.floor(concept) - 1 + 12) % 12) + 1;
 };
 
 export const FLOWER_PALETTES: Array<[string, string]> = [
@@ -49,6 +53,8 @@ export const FLOWER_PALETTES: Array<[string, string]> = [
   ["#e0f2f1", "#26a69a"],
   ["#fff176", "#ff8f00"],
   ["#d1c4e9", "#6a1b9a"],
+  ["#b2ebf2", "#00838f"],
+  ["#ffccbc", "#d84315"],
 ];
 
 export const FLOWER_COMPONENTS: FlowerRenderer[] = [
@@ -62,6 +68,8 @@ export const FLOWER_COMPONENTS: FlowerRenderer[] = [
   concept08Flowers[0],
   concept09Flowers[0],
   concept10Flowers[0],
+  concept11Flowers[0],
+  concept12Flowers[0],
 ];
 
 export type { FlowerRenderer, FlowerVisualProps } from "./types";

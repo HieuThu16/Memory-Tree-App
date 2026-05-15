@@ -221,9 +221,9 @@ function formatComparableValue(value: unknown) {
 
 let webPushConfigured = false;
 const getVapidConfig = () => {
-  const subject = process.env.VAPID_SUBJECT;
-  const publicKey = process.env.VAPID_PUBLIC_KEY;
-  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const subject = process.env.VAPID_SUBJECT?.trim();
+  const publicKey = process.env.VAPID_PUBLIC_KEY?.trim();
+  const privateKey = process.env.VAPID_PRIVATE_KEY?.trim();
 
   if (!subject || !publicKey || !privateKey) {
     return null;
@@ -233,13 +233,18 @@ const getVapidConfig = () => {
 };
 
 const configureWebPush = () => {
-  if (webPushConfigured) return true;
-  const config = getVapidConfig();
-  if (!config) return false;
+  try {
+    if (webPushConfigured) return true;
+    const config = getVapidConfig();
+    if (!config) return false;
 
-  webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
-  webPushConfigured = true;
-  return true;
+    webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
+    webPushConfigured = true;
+    return true;
+  } catch (err) {
+    console.error("WebPush config error:", err);
+    return false;
+  }
 };
 
 const parseStoredSubscription = (raw: string): webpush.PushSubscription | null => {
@@ -285,15 +290,30 @@ async function notifyRoomMembersForNewMemory(
 
   const senderName = senderNameResult.data?.display_name ?? "Người ấy";
 
-  const { data: subscriptions } = await supabase
-    .from("push_subscriptions")
-    .select("user_id, room_id, subscription")
+  // Get all members of this room (excluding the sender)
+  const { data: members } = await supabase
+    .from("room_members")
+    .select("user_id")
     .eq("room_id", roomId)
     .neq("user_id", currentUserId);
 
+  if (!members?.length) return;
+
+  const memberUserIds = members.map((m) => m.user_id);
+  console.log(`Notifying ${memberUserIds.length} members for room ${roomId}`);
+
+  // Get all push subscriptions for those members
+  const { data: subscriptions } = await supabase
+    .from("push_subscriptions")
+    .select("user_id, subscription")
+    .in("user_id", memberUserIds);
+
   if (!subscriptions?.length) {
+    console.log("No active push subscriptions found for room members.");
     return;
   }
+
+  console.log(`Found ${subscriptions.length} active push subscriptions.`);
 
   const payload = JSON.stringify({
     title: "Kỷ niệm mới vừa được thêm",

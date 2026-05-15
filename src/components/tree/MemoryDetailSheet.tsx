@@ -80,6 +80,18 @@ const CONCEPT_DETAIL_THEME = [
     body: "bg-gradient-to-b from-yellow-100/28 via-white/54 to-amber-100/24",
     card: "border-yellow-300/70 bg-gradient-to-br from-yellow-100/42 via-white/80 to-amber-100/30",
   },
+  {
+    header:
+      "border-cyan-300/70 bg-gradient-to-r from-cyan-100/82 via-sky-100/66 to-white/80",
+    body: "bg-gradient-to-b from-cyan-100/28 via-white/54 to-sky-100/24",
+    card: "border-cyan-300/70 bg-gradient-to-br from-cyan-100/42 via-white/80 to-sky-100/30",
+  },
+  {
+    header:
+      "border-fuchsia-300/70 bg-gradient-to-r from-fuchsia-100/82 via-pink-100/66 to-white/80",
+    body: "bg-gradient-to-b from-fuchsia-100/28 via-white/54 to-pink-100/24",
+    card: "border-fuchsia-300/70 bg-gradient-to-br from-fuchsia-100/42 via-white/80 to-pink-100/30",
+  },
 ] as const;
 
 function ConceptFlowerIcon({
@@ -131,6 +143,7 @@ function ConceptFlowerIcon({
           gid={`detail-concept-${safeConcept}-${size}`}
           c1={c1}
           c2={c2}
+          label={safeConcept}
         />
       </g>
     </svg>
@@ -238,7 +251,7 @@ export default function MemoryDetailSheet({
               <div className="flex min-w-0 items-center gap-2">
                 <BackButton onClick={onClose} />
                 <ConceptFlowerIcon concept={concept} size={18} />
-                <h3 className="text-base font-semibold text-rose-900 sm:text-lg whitespace-normal break-words">
+                <h3 className="truncate text-base font-semibold text-rose-900 sm:text-lg">
                   {selectedMemory.title}
                 </h3>
               </div>

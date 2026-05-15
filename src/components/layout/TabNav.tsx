@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const tabs = [
   {
-    href: "/personal",
+    href: "/",
     label: "Cá nhân",
     emoji: "🌸",
     icon: (
@@ -27,7 +27,7 @@ const tabs = [
   },
   {
     href: "/friends",
-    label: "Bạn bè",
+    label: "Kỉ niệm",
     icon: (
       <svg
         width="16"
@@ -89,18 +89,56 @@ const tabs = [
       </svg>
     ),
   },
+  {
+    href: "/music",
+    label: "Nhạc",
+    icon: (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M9 18V5l12-2v13" />
+        <circle cx="6" cy="18" r="3" />
+        <circle cx="18" cy="16" r="3" />
+      </svg>
+    ),
+  },
+  {
+    href: "/settings",
+    label: "Cài đặt",
+    icon: (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    ),
+  },
 ];
 
 export default function TabNav() {
   const pathname = usePathname();
 
   return (
-    <nav
-      className="fixed inset-x-0 z-50 mx-auto w-[min(480px,calc(100vw-0.9rem))] pb-2"
-      style={{ bottom: "max(12px, env(safe-area-inset-bottom))" }}
+    <nav 
+      className="fixed inset-x-0 bottom-0 z-50 mx-auto w-[min(480px,calc(100vw-0.5rem))] pb-[max(4px,env(safe-area-inset-bottom))]"
     >
       <div className="mx-auto flex justify-between gap-1 rounded-[2rem] border border-white/60 bg-white/40 p-2 shadow-[0_12px_40px_-16px_rgba(124,92,230,0.4)] backdrop-blur-2xl">
-        {tabs.map((tab) => {
+        {tabs.filter(tab => tab.href !== "/").map((tab) => {
           const isActive =
             tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
 

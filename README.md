@@ -14,6 +14,21 @@ pnpm dev
 bun dev
 ```
 
+Note: this project runs development with webpack (`next dev --webpack`) to keep `@serwist/next` stable in local development.
+
+If you hit local memory/cache errors (for example `RangeError: Array buffer allocation failed`), run:
+
+```bash
+npm run dev:reset
+```
+
+## Local Music Files
+
+The `/music` tab now reads local audio files directly from the repository `music` folder.
+
+- Put your `.mp3`, `.wav`, `.m4a`, or `.ogg` files in `music/`.
+- Refresh the `/music` tab to see new tracks.
+
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.

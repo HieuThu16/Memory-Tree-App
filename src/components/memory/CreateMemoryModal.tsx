@@ -93,6 +93,7 @@ function FlowerConceptPreview({ concept }: { concept: number }) {
             gid={`modal-concept-${safeConcept}`}
             c1={c1}
             c2={c2}
+            label={safeConcept}
           />
         </g>
       </svg>
@@ -420,7 +421,7 @@ export default function CreateMemoryModal() {
           onClick={closeCreate}
         >
           <motion.div
-            className={`glass-card memory-flower-panel ${flowerThemeClass} relative mt-auto flex max-h-[92dvh] w-full max-w-md flex-col rounded-2xl shadow-[var(--shadow-card)] sm:mt-0 sm:max-w-lg sm:rounded-3xl`}
+            className={`glass-card memory-flower-panel ${flowerThemeClass} relative mt-auto flex h-[95dvh] w-full max-w-md flex-col rounded-2xl shadow-[var(--shadow-card)] sm:mt-0 sm:h-auto sm:max-h-[90dvh] sm:max-w-lg sm:rounded-3xl`}
             initial={{ y: "100%", opacity: 0, scale: 0.95 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: "100%", opacity: 0, scale: 0.95 }}
@@ -481,43 +482,7 @@ export default function CreateMemoryModal() {
                 />
               </div>
 
-              {/* Location */}
-              <div className="mt-3">
-                <div className="flex items-center justify-between">
-                  <label
-                    htmlFor="memory-location"
-                    className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
-                  >
-                    📍 Địa điểm
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleGetCurrentLocation}
-                    className="text-[10px] text-accent font-medium hover:underline flex items-center gap-1"
-                  >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                    Lấy vị trí hiện tại
-                  </button>
-                </div>
-                <input
-                  id="memory-location"
-                  type="text"
-                  placeholder="VD: Quán cafe quen thuộc..."
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="input-field mt-1.5 !rounded-xl !py-2.5 !text-sm"
-                />
-              </div>
+
 
               {/* Content */}
               <div className="mt-3">
@@ -645,6 +610,44 @@ export default function CreateMemoryModal() {
                         />
                       </div>
                     </div>
+
+                    {/* Location */}
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <label
+                          htmlFor="memory-location"
+                          className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-widest text-text-muted"
+                        >
+                          📍 Địa điểm
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleGetCurrentLocation}
+                          className="text-[10px] text-accent font-medium hover:underline flex items-center gap-1"
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <circle cx="12" cy="12" r="10" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                          Lấy vị trí hiện tại
+                        </button>
+                      </div>
+                      <input
+                        id="memory-location"
+                        type="text"
+                        placeholder="VD: Quán cafe quen thuộc..."
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        className="input-field mt-1.5 !rounded-xl !py-2.5 !text-sm"
+                      />
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -730,16 +733,6 @@ export default function CreateMemoryModal() {
                     : isEditing
                       ? "Cập nhật 🌿"
                       : "Lưu kỉ niệm 🌿"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    reset();
-                    closeCreate();
-                  }}
-                  className="btn-secondary px-4 py-2.5 text-sm"
-                >
-                  Hủy
                 </button>
               </div>
             </div>

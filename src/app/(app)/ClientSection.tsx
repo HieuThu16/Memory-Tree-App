@@ -1,22 +1,64 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import dynamic from "next/dynamic";
-import MemoryGallery from "@/components/memory/MemoryGallery";
-import MemoryList from "@/components/memory/MemoryList";
-import MemoryTree from "@/components/tree/MemoryTree";
 import type { MemoryRecord } from "@/lib/types";
 import { useMemoryStore } from "@/lib/stores/memoryStore";
 import { useTreeStore } from "@/lib/stores/treeStore";
+import { useUiStore } from "@/lib/stores/uiStore";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { MEMORY_SELECT, MEMORY_SELECT_LEGACY } from "@/lib/supabase/selects";
+import MemoryTree from "@/components/tree/MemoryTree";
+import { getPrimaryImageMedia } from "@/lib/media";
+
+const MemoryGallery = dynamic(
+  () => import("@/components/memory/MemoryGallery"),
+  {
+    loading: () => (
+      <div className="flex min-h-[50vh] items-center justify-center text-text-muted animate-pulse">
+        Dang tai thu vien ky niem...
+      </div>
+    ),
+  },
+);
+
+const MemoryList = dynamic(() => import("@/components/memory/MemoryList"), {
+  loading: () => (
+    <div className="flex min-h-[50vh] items-center justify-center text-text-muted animate-pulse">
+      Dang tai danh sach ky niem...
+    </div>
+  ),
+});
 
 const MemoryMap = dynamic(() => import("@/components/memory/MemoryMap"), {
   ssr: false,
   loading: () => (
     <div className="flex min-h-[50vh] items-center justify-center text-text-muted animate-pulse">
-      Đang tải bản đồ kỷ niệm...
+      Dang tai ban do ky niem...
     </div>
   ),
 });
+
+const isMissingMemoryMetadataColumn = (message?: string) => {
+  if (!message) return false;
+  const lowered = message.toLowerCase();
+  return (
+    lowered.includes("column") &&
+    (lowered.includes("memories.with_whom") ||
+      lowered.includes("memories.event_time"))
+  );
+};
+
+type BrowserMemoryListResult = {
+  data: Record<string, unknown>[] | null;
+  error: { message: string } | null;
+};
 
 export default function ClientSection({
   memories,
@@ -30,14 +72,68 @@ export default function ClientSection({
   const scopedMemories = useMemoryStore((s) =>
     s.scopeKey === "personal" ? s.memories : memories,
   );
+  const addToast = useUiStore((s) => s.addToast);
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [viewMode, setViewMode] = useState<"tree" | "gallery" | "map" | "list">(
     "tree",
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const [hasLoadedDetailedMemories, setHasLoadedDetailedMemories] =
+    useState(false);
+  const [isLoadingDetailedMemories, startDetailedLoadTransition] =
+    useTransition();
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   useEffect(() => {
     hydrateScope("personal", memories);
   }, [hydrateScope, memories]);
+
+  useEffect(() => {
+    if (
+      viewMode === "tree" ||
+      viewMode === "map" ||
+      hasLoadedDetailedMemories
+    ) {
+      return;
+    }
+
+    startDetailedLoadTransition(async () => {
+      const primaryResult = (await supabase
+        .from("memories")
+        .select(MEMORY_SELECT)
+        .is("room_id", null)
+        .order("date", {
+          ascending: true,
+        })) as unknown as BrowserMemoryListResult;
+
+      if (!primaryResult.error) {
+        hydrateScope("personal", (primaryResult.data ?? []) as MemoryRecord[]);
+        setHasLoadedDetailedMemories(true);
+        return;
+      }
+
+      if (!isMissingMemoryMetadataColumn(primaryResult.error.message)) {
+        addToast("Khong tai duoc du lieu day du cua ky niem.", "error");
+        return;
+      }
+
+      const legacyResult = (await supabase
+        .from("memories")
+        .select(MEMORY_SELECT_LEGACY)
+        .is("room_id", null)
+        .order("date", {
+          ascending: true,
+        })) as unknown as BrowserMemoryListResult;
+
+      if (legacyResult.error) {
+        addToast("Khong tai duoc du lieu day du cua ky niem.", "error");
+        return;
+      }
+
+      hydrateScope("personal", (legacyResult.data ?? []) as MemoryRecord[]);
+      setHasLoadedDetailedMemories(true);
+    });
+  }, [addToast, hasLoadedDetailedMemories, hydrateScope, supabase, viewMode]);
 
   const sortedMemories = useMemo(
     () =>
@@ -48,20 +144,28 @@ export default function ClientSection({
       }),
     [scopedMemories],
   );
-  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+
+  const activeSearchQuery =
+    viewMode === "tree" ? "" : deferredSearchQuery.trim().toLowerCase();
 
   const filteredMemories = useMemo(() => {
-    if (!normalizedSearchQuery) {
+    if (!activeSearchQuery) {
       return sortedMemories;
     }
 
     return sortedMemories.filter(
       (memory) =>
-        memory.title.toLowerCase().includes(normalizedSearchQuery) ||
+        memory.title.toLowerCase().includes(activeSearchQuery) ||
         (memory.category &&
-          memory.category.toLowerCase().includes(normalizedSearchQuery)),
+          memory.category.toLowerCase().includes(activeSearchQuery)),
     );
-  }, [normalizedSearchQuery, sortedMemories]);
+  }, [activeSearchQuery, sortedMemories]);
+
+  const galleryMemories = useMemo(
+    () =>
+      filteredMemories.filter((memory) => getPrimaryImageMedia(memory.media)),
+    [filteredMemories],
+  );
 
   const isTreeMode = viewMode === "tree";
 
@@ -70,13 +174,25 @@ export default function ClientSection({
     useTreeStore.getState().setIsDetailOpen(true);
   };
 
+  const shouldShowDetailedViewLoader =
+    (viewMode === "list" || viewMode === "gallery") &&
+    isLoadingDetailedMemories &&
+    !hasLoadedDetailedMemories;
+
   const renderActiveView = () => {
+    if (shouldShowDetailedViewLoader) {
+      return (
+        <div className="flex min-h-[50vh] items-center justify-center text-sm text-text-muted animate-pulse">
+          Dang tai du lieu chi tiet...
+        </div>
+      );
+    }
+
     if (viewMode === "tree") {
       return (
         <MemoryTree
           memories={filteredMemories}
           currentUserId={currentUserId ?? undefined}
-          startAtLatestYear={true}
         />
       );
     }
@@ -90,7 +206,7 @@ export default function ClientSection({
     }
 
     if (viewMode === "gallery") {
-      return <MemoryGallery memories={filteredMemories} />;
+      return <MemoryGallery memories={galleryMemories} />;
     }
 
     return <MemoryMap memories={filteredMemories} />;
@@ -101,33 +217,37 @@ export default function ClientSection({
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-1.5">
           <span className="flex-shrink-0 rounded-full border border-border bg-white/75 px-2.5 py-1 text-[10px] font-semibold text-text-secondary">
-            🌸 {filteredMemories.length}/{scopedMemories.length}
+            🌸{" "}
+            {viewMode === "gallery"
+              ? galleryMemories.length
+              : filteredMemories.length}
+            /{scopedMemories.length}
           </span>
 
-          {viewMode !== "tree" && (
+          {!isTreeMode ? (
             <div className="relative min-w-0 flex-1">
               <input
                 type="text"
-                placeholder="Tìm kỷ niệm..."
+                placeholder="Tim ky niem..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(event) => setSearchQuery(event.target.value)}
                 className="input-field w-full !rounded-xl !py-1.5 !pl-7 !text-xs"
               />
               <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-text-muted">
                 🔍
               </span>
             </div>
-          )}
+          ) : null}
 
           <div className="flex-1" />
 
           <div className="flex flex-shrink-0 items-center gap-0.5 rounded-xl border border-border bg-white/60 p-0.5 backdrop-blur-sm">
             {(
               [
-                { mode: "tree" as const, icon: "🌳", label: "Cây" },
-                { mode: "list" as const, icon: "📋", label: "Danh sách" },
-                { mode: "gallery" as const, icon: "🖼️", label: "Thư viện" },
-                { mode: "map" as const, icon: "🗺️", label: "Bản đồ" },
+                { mode: "tree" as const, icon: "🌳", label: "Cay" },
+                { mode: "list" as const, icon: "📋", label: "Danh sach" },
+                { mode: "gallery" as const, icon: "🖼️", label: "Thu vien" },
+                { mode: "map" as const, icon: "🗺️", label: "Ban do" },
               ] as const
             ).map(({ mode, icon, label }) => (
               <button
@@ -151,7 +271,7 @@ export default function ClientSection({
             onClick={() => openCreate()}
             className="btn-primary flex-shrink-0 rounded-full px-3 py-1.5 text-[10px] whitespace-nowrap"
           >
-            + Thêm
+            + Them
           </button>
         </div>
       </div>

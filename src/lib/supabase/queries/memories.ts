@@ -1,5 +1,10 @@
 import type { MemoryRecord } from "@/lib/types";
-import { MEMORY_SELECT, MEMORY_SELECT_LEGACY } from "@/lib/supabase/selects";
+import {
+  MEMORY_SELECT,
+  MEMORY_SELECT_LEGACY,
+  MEMORY_SUMMARY_SELECT,
+  MEMORY_SUMMARY_SELECT_LEGACY,
+} from "@/lib/supabase/selects";
 import { createSupabaseServerClient } from "../server";
 
 type GenericMemoryQuery = {
@@ -20,6 +25,8 @@ type GenericMemoryClient = {
   };
 };
 
+type MemorySelectMode = "summary" | "full";
+
 const isMissingMemoryMetadataColumn = (message?: string) => {
   if (!message) return false;
   const lowered = message.toLowerCase();
@@ -30,21 +37,38 @@ const isMissingMemoryMetadataColumn = (message?: string) => {
   );
 };
 
-const normalizeMemoryRow = (row: Record<string, unknown>): MemoryRecord => {
+const normalizeMemoryRow = (
+  row: Record<string, unknown>,
+  mode: MemorySelectMode,
+): MemoryRecord => {
   const base = row as MemoryRecord;
+
   return {
     ...base,
+    content:
+      mode === "full" && typeof row.content === "string" ? row.content : null,
     with_whom: typeof row.with_whom === "string" ? row.with_whom : null,
     event_time: typeof row.event_time === "string" ? row.event_time : null,
+    media:
+      mode === "full" && Array.isArray(row.media)
+        ? (row.media as MemoryRecord["media"])
+        : undefined,
   };
 };
 
 async function queryMemoriesWithFallback(params: {
   roomId?: string | null;
   id?: string;
+  mode: MemorySelectMode;
 }) {
   const supabase = await createSupabaseServerClient();
   const genericSupabase = supabase as unknown as GenericMemoryClient;
+  const primarySelect =
+    params.mode === "full" ? MEMORY_SELECT : MEMORY_SUMMARY_SELECT;
+  const legacySelect =
+    params.mode === "full"
+      ? MEMORY_SELECT_LEGACY
+      : MEMORY_SUMMARY_SELECT_LEGACY;
 
   const applyFilters = (builder: GenericMemoryQuery): GenericMemoryQuery => {
     let scoped = builder;
@@ -62,14 +86,14 @@ async function queryMemoriesWithFallback(params: {
   };
 
   const primaryBuilder = applyFilters(
-    genericSupabase.from("memories").select(MEMORY_SELECT),
+    genericSupabase.from("memories").select(primarySelect),
   );
   const primary = await primaryBuilder.order("date", { ascending: true });
 
   if (!primary.error) {
     const rows = (primary.data ?? []) as Record<string, unknown>[];
     return {
-      data: rows.map((row) => normalizeMemoryRow(row)),
+      data: rows.map((row) => normalizeMemoryRow(row, params.mode)),
       error: null,
     };
   }
@@ -79,7 +103,7 @@ async function queryMemoriesWithFallback(params: {
   }
 
   const legacyBuilder = applyFilters(
-    genericSupabase.from("memories").select(MEMORY_SELECT_LEGACY),
+    genericSupabase.from("memories").select(legacySelect),
   );
   const legacy = await legacyBuilder.order("date", { ascending: true });
 
@@ -89,34 +113,30 @@ async function queryMemoriesWithFallback(params: {
 
   const rows = (legacy.data ?? []) as Record<string, unknown>[];
   return {
-    data: rows.map((row) => normalizeMemoryRow(row)),
+    data: rows.map((row) => normalizeMemoryRow(row, params.mode)),
     error: null,
   };
 }
 
 export async function getPersonalMemories(): Promise<MemoryRecord[]> {
-  const { data, error } = await queryMemoriesWithFallback({ roomId: null });
+  const { data, error } = await queryMemoriesWithFallback({
+    roomId: null,
+    mode: "summary",
+  });
 
   if (error) {
     console.error("Failed to load memories", error.message);
     return [];
   }
 
-  // Debug: log location data for investigation
-  const withLocation = (data ?? []).filter(
-    (m: { location: string | null }) => m.location,
-  );
-  if (withLocation.length > 0) {
-    console.log(
-      `[getPersonalMemories] ${withLocation.length}/${(data ?? []).length} memories have location set`,
-    );
-  }
-
   return data ?? [];
 }
 
 export async function getMemoryById(id: string): Promise<MemoryRecord | null> {
-  const { data, error } = await queryMemoriesWithFallback({ id });
+  const { data, error } = await queryMemoriesWithFallback({
+    id,
+    mode: "full",
+  });
 
   if (error) {
     console.error("Failed to load memory", error.message);
@@ -127,7 +147,10 @@ export async function getMemoryById(id: string): Promise<MemoryRecord | null> {
 }
 
 export async function getRoomMemories(roomId: string): Promise<MemoryRecord[]> {
-  const { data, error } = await queryMemoriesWithFallback({ roomId });
+  const { data, error } = await queryMemoriesWithFallback({
+    roomId,
+    mode: "summary",
+  });
 
   if (error) {
     console.error("Failed to load room memories", error.message);

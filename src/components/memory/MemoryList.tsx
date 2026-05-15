@@ -13,11 +13,13 @@ import { flowerConceptFromMemory, getFlowerThemeClass } from "./flowerConcept";
 export default function MemoryList({
   memories,
   onSelect,
+  onMediaClick,
   participantsByUserId,
   animated = true,
 }: {
   memories: MemoryRecord[];
   onSelect?: (memory: MemoryRecord) => void;
+  onMediaClick?: (url: string, type: "image" | "video") => void;
   participantsByUserId?: Map<string, MemoryParticipant>;
   animated?: boolean;
 }) {
@@ -71,33 +73,10 @@ export default function MemoryList({
           <MemoryCard
             memory={memory}
             onSelect={onSelect}
+            onMediaClick={onMediaClick}
             participant={participantsByUserId?.get(memory.user_id)}
             animated={animated}
           />
-          {/* Action buttons (Edit/Delete) overlay */}
-          <div className="absolute top-2 right-2 flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditingMemory(memory);
-              }}
-              className="memory-flower-action flex h-8 w-8 items-center justify-center rounded-full border text-text-secondary shadow-sm hover:text-accent hover:border-accent"
-              title="Sửa"
-            >
-              ✏️
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDelete(memory.id);
-              }}
-              disabled={isDeleting}
-              className="memory-flower-action flex h-8 w-8 items-center justify-center rounded-full border text-text-secondary shadow-sm hover:text-rose hover:border-rose disabled:opacity-50"
-              title="Xóa"
-            >
-              🗑️
-            </button>
-          </div>
         </div>
       ))}
     </div>

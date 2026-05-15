@@ -1,9 +1,19 @@
-import { getUserRooms } from "@/lib/supabase/queries/rooms";
+import { redirect } from "next/navigation";
+import {
+  getLatestUserRoomId,
+  getUserRooms,
+} from "@/lib/supabase/queries/rooms";
 import ClientFriendsSection from "./ClientFriendsSection";
 
 export const dynamic = "force-dynamic";
 
 export default async function FriendsPage() {
+  const latestRoomId = await getLatestUserRoomId();
+
+  if (latestRoomId) {
+    redirect(`/friends/${latestRoomId}`);
+  }
+
   const rooms = await getUserRooms();
 
   return (

@@ -1,8 +1,8 @@
 "use client";
 
 import type { MemoryParticipant, MemoryRecord } from "@/lib/types";
-import { getParticipantAppearance } from "@/lib/memberAppearance";
 import { getMediaPublicUrl, getPrimaryMedia } from "@/lib/media";
+import { getParticipantAppearance } from "@/lib/memberAppearance";
 import {
   flowerConceptFromMemory,
   getFlowerSpeciesByConcept,
@@ -49,112 +49,94 @@ const formatEventTime = (value: string | null) => {
 export default function MemoryCard({
   memory,
   onSelect,
+  onMediaClick,
   participant,
-  animated = true,
 }: {
   memory: MemoryRecord;
   onSelect?: (memory: MemoryRecord) => void;
+  onMediaClick?: (url: string, type: "image" | "video") => void;
   participant?: MemoryParticipant;
   animated?: boolean;
 }) {
   const style = typeStyles[memory.type] ?? typeStyles.album;
   const appearance = participant ? getParticipantAppearance(participant) : null;
-  const primaryMedia = getPrimaryMedia(memory.media);
-  const mediaUrl = primaryMedia
-    ? getMediaPublicUrl(primaryMedia.storage_path)
-    : null;
-  const flowerConcept = flowerConceptFromMemory(memory);
-  const flowerThemeClass = getFlowerThemeClass(flowerConcept);
-  const flowerSpecies = getFlowerSpeciesByConcept(flowerConcept);
+  // Deterministic pastel color based on ID
+  const colors = [
+    { bg: "bg-blue-50/80", border: "border-blue-200/50", accent: "bg-blue-500", text: "text-blue-900", sub: "text-blue-700/60" },
+    { bg: "bg-pink-50/80", border: "border-pink-200/50", accent: "bg-pink-500", text: "text-pink-900", sub: "text-pink-700/60" },
+    { bg: "bg-yellow-50/80", border: "border-yellow-200/50", accent: "bg-yellow-500", text: "text-yellow-950", sub: "text-yellow-800/60" },
+    { bg: "bg-emerald-50/80", border: "border-emerald-200/50", accent: "bg-emerald-500", text: "text-emerald-950", sub: "text-emerald-800/60" },
+  ];
+  const colorIndex = Math.abs(memory.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % colors.length;
+  const theme = colors[colorIndex];
 
   return (
-    <button
-      type="button"
+    <div
       onClick={() => onSelect?.(memory)}
-      className={`glass-card glass-card-hover memory-flower-card ${flowerThemeClass} group w-full rounded-xl border p-3 text-left sm:rounded-2xl sm:p-4`}
+      className="group relative flex items-start gap-3 py-6 cursor-pointer"
     >
-      {primaryMedia && mediaUrl ? (
-        <div className="mb-3 overflow-hidden rounded-lg border border-border bg-white/65 sm:rounded-xl">
-          {primaryMedia.media_type === "video" ? (
-            <div className="relative">
-              <video
-                src={mediaUrl}
-                className="aspect-[4/3] w-full object-contain bg-slate-950/4 p-1"
-                muted
-                playsInline
-                preload="metadata"
-              />
-              <div className="absolute bottom-1 right-1 rounded-full bg-black/50 px-1.5 py-0.5 text-[9px] text-white">
-                🎬
-              </div>
-            </div>
-          ) : (
-            <img
-              src={mediaUrl}
-              alt={memory.title}
-              className="aspect-[4/3] w-full object-contain bg-slate-950/4 p-1"
-            />
-          )}
-        </div>
-      ) : null}
-
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className={`badge ${style.badge} !px-2 !py-0.5 !text-[9px]`}>
-              {style.icon}
-            </span>
-            <span className="memory-flower-chip inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-text-secondary">
-              <span
-                className={`memory-flower-icon ${flowerSpecies.motionClass}`}
-              >
-                {flowerSpecies.icon}
-              </span>
-              {flowerSpecies.name}
-            </span>
-            {/* Avatar removed as per request */}
+      {/* Left: Date Circle */}
+      <div className="flex flex-col items-center shrink-0 w-16">
+        <div className={`w-14 h-14 rounded-full ${theme.accent} flex flex-col items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform duration-500 border-4 border-white`}>
+          <div className="text-[18px] font-black text-white leading-none">
+            {new Date(memory.date || memory.created_at).getDate()}
           </div>
-          <h3 className="mt-1.5 text-sm font-semibold text-foreground transition-colors group-hover:text-accent whitespace-normal break-words">
-            {memory.title}
-          </h3>
-          {memory.content && (
-            <p className="mt-1 line-clamp-2 text-xs text-text-secondary">
-              {memory.content}
-            </p>
-          )}
-          {memory.category || memory.location ? (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {memory.category ? (
-                <span className="memory-flower-chip rounded-full border px-2 py-1 text-[10px] font-medium text-text-secondary">
-                  ✿ {memory.category}
-                </span>
-              ) : null}
-              {memory.with_whom ? (
-                <span className="memory-flower-chip rounded-full border px-2 py-1 text-[10px] font-medium text-text-secondary">
-                  👥 {memory.with_whom}
-                </span>
-              ) : null}
-              {memory.location ? (
-                <span className="memory-flower-chip rounded-full border px-2 py-1 text-[10px] font-medium text-text-secondary">
-                  📍 {memory.location}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
+          <div className="text-[8px] font-black uppercase text-white/80 mt-0.5">
+            Thg {new Date(memory.date || memory.created_at).getMonth() + 1}
+          </div>
         </div>
+        <div className={`mt-3 h-20 w-[2px] rounded-full bg-gradient-to-b ${theme.accent.replace('bg-', 'from-')}/30 to-transparent`} />
       </div>
 
-      <div className="mt-2 flex items-center gap-2 text-[10px] text-text-muted">
-        <span>🗓 {formatDate(memory)}</span>
-        {memory.event_time ? (
-          <>
-            <span className="opacity-50">•</span>
-            <span>🕒 {formatEventTime(memory.event_time)}</span>
-          </>
-        ) : null}
-        <span className="opacity-50">•</span>
-        <span className="opacity-70">🕐 {formatCreatedAt(memory)}</span>
+      {/* Right: Content Card - Pastel Colors */}
+      <div className={`flex-1 ${theme.bg} rounded-[2.5rem] border-2 ${theme.border} p-6 shadow-sm backdrop-blur-md transition-all duration-500 hover:shadow-xl hover:-translate-y-1`}>
+        <div className="flex flex-col gap-3">
+          {/* Body */}
+          <div className="min-w-0">
+            <h3 className={`text-[18px] font-black ${theme.text} leading-tight transition-colors`}>
+              {memory.title}
+            </h3>
+            {memory.content && (
+              <p className={`mt-2 text-[13px] ${theme.sub} line-clamp-3 leading-relaxed font-semibold`}>
+                {memory.content}
+              </p>
+            )}
+          </div>
+
+          {/* Media Thumbnails */}
+          {memory.media && memory.media.length > 0 && (
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              {memory.media.map((m) => {
+                const url = getMediaPublicUrl(m.storage_path);
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMediaClick?.(url, m.media_type === "video" ? "video" : "image");
+                    }}
+                    className="relative aspect-square rounded-2xl overflow-hidden border-2 border-white bg-white/40 hover:scale-105 transition-all duration-300 shadow-sm"
+                  >
+                    <img 
+                      src={m.media_type === 'video' ? (m.thumbnail ? getMediaPublicUrl(m.thumbnail) : url) : url} 
+                      alt="" 
+                      className="w-full h-full object-cover"
+                    />
+                    {m.media_type === 'video' && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+                        <div className="w-8 h-8 rounded-full bg-white/40 flex items-center justify-center border border-white/50">
+                           <span className="text-[10px] text-white ml-0.5">▶</span>
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
-    </button>
+    </div>
   );
 }

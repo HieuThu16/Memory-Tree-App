@@ -14,6 +14,7 @@ export function FlowerBase({
   gid,
   c1,
   c2,
+  label,
   petals,
   innerR = 0.11,
   centerColor = "#fff9c4",
@@ -50,6 +51,23 @@ export function FlowerBase({
           opacity="0.72"
         />
       ) : null}
+      {label !== undefined && label !== null && (
+        <text
+          x={0}
+          y={-size * 0.4}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize={size * 0.45}
+          fontWeight="900"
+          fill="#ffffff"
+          stroke="#000000"
+          strokeWidth={size * 0.08}
+          paintOrder="stroke fill"
+          className="drop-shadow-md"
+        >
+          {label}
+        </text>
+      )}
     </g>
   );
 }

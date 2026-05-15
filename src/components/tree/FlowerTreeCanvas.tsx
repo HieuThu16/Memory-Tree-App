@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { MemoryRecord } from "@/lib/types";
 
@@ -15,9 +15,20 @@ type FlowerTreeCanvasProps = {
   onMemoryClick: (memoryId: string) => void;
   onExportSvgChange: (svg: SVGSVGElement | null) => void;
   startAtLatestYear?: boolean;
+  roomId: string;
 };
 
+import { useRouter } from "next/navigation";
+
 const YEAR_FLOWER_ICONS = [
+  "/icon/nam/1.png",
+  "/icon/nam/2.png",
+  "/icon/nam/3.png",
+  "/icon/nam/4.png",
+  "/icon/nam/1.png",
+  "/icon/nam/2.png",
+  "/icon/nam/3.png",
+  "/icon/nam/4.png",
   "/icon/nam/1.png",
   "/icon/nam/2.png",
   "/icon/nam/3.png",
@@ -59,138 +70,30 @@ const MONTH_FLOWER_ICONS = [
   "/icon/thang/5.png",
   "/icon/thang/6.png",
 ] as const;
-
-const MONTH_ICON_THEMES = [
-  {
-    bg: "#eef9ff",
-    ring: "#9bb7d9",
-    text: "#3e6a8f",
-    badge: "bg-sky-100/80 border-sky-200/70",
-  },
-  {
-    bg: "#fff7e8",
-    ring: "#e7c48f",
-    text: "#a4702e",
-    badge: "bg-amber-100/80 border-amber-200/70",
-  },
-  {
-    bg: "#fff1f5",
-    ring: "#f2a2bc",
-    text: "#a6506a",
-    badge: "bg-rose-100/85 border-rose-200/70",
-  },
-  {
-    bg: "#f3f6ff",
-    ring: "#b1b9d8",
-    text: "#5a6285",
-    badge: "bg-slate-100/80 border-slate-200/70",
-  },
-  {
-    bg: "#fff1f6",
-    ring: "#d4a1b4",
-    text: "#9a6b7e",
-    badge: "bg-pink-100/80 border-pink-200/70",
-  },
-  {
-    bg: "#fff8db",
-    ring: "#f2cd6c",
-    text: "#9b7423",
-    badge: "bg-yellow-100/80 border-yellow-200/70",
-  },
-] as const;
-
-const MONTH_TREE_ICONS = [
-  "/icon/cay-thang/1.png",
-  "/icon/cay-thang/2.png",
-  "/icon/cay-thang/3.png",
-  "/icon/cay-thang/4.png",
-  "/icon/cay-thang/5.png",
+const MONTH_NODES = [
+  { m: 1, x: 75, y: 110 },
+  { m: 2, x: 130, y: 70 },
+  { m: 3, x: 185, y: 55 },
+  { m: 4, x: 250, y: 80 },
+  { m: 5, x: 300, y: 130 },
+  { m: 6, x: 310, y: 200 },
+  { m: 7, x: 55, y: 180 },
+  { m: 8, x: 85, y: 245 },
+  { m: 9, x: 135, y: 215 },
+  { m: 10, x: 230, y: 230 },
+  { m: 11, x: 275, y: 255 },
+  { m: 12, x: 190, y: 165 },
 ] as const;
 
 const getYearIconForMonth = (month: number) =>
-  YEAR_FLOWER_ICONS[Math.floor((month - 1) / 3)] ?? YEAR_FLOWER_ICONS[0];
+  YEAR_FLOWER_ICONS[month - 1] ?? YEAR_FLOWER_ICONS[0];
 
 const getYearThemeForMonth = (month: number) =>
   YEAR_ICON_THEMES[Math.floor((month - 1) / 3)] ?? YEAR_ICON_THEMES[0];
 
-const getMonthIconForMonth = (month: number) =>
-  MONTH_FLOWER_ICONS[(month - 1) % MONTH_FLOWER_ICONS.length] ??
-  MONTH_FLOWER_ICONS[0];
-
-const getMonthTreeIconForMonth = (month: number) =>
-  MONTH_TREE_ICONS[(month - 1) % MONTH_TREE_ICONS.length] ??
-  MONTH_TREE_ICONS[0];
-
-const MONTH_NODES = [
-  { m: 1, sid: 1, x: 102, y: 66 },
-  { m: 2, sid: 1, x: 132, y: 52 },
-  { m: 3, sid: 1, x: 158, y: 72 },
-  { m: 4, sid: 2, x: 214, y: 70 },
-  { m: 5, sid: 2, x: 252, y: 84 },
-  { m: 6, sid: 2, x: 236, y: 122 },
-  { m: 7, sid: 3, x: 92, y: 136 },
-  { m: 8, sid: 3, x: 64, y: 160 },
-  { m: 9, sid: 3, x: 120, y: 176 },
-  { m: 10, sid: 4, x: 214, y: 168 },
-  { m: 11, sid: 4, x: 252, y: 186 },
-  { m: 12, sid: 4, x: 198, y: 208 },
-] as const;
-
-const MEMORIES_CANOPY_SLOTS = [
-  { x: 180, y: 52 }, { x: 130, y: 64 }, { x: 230, y: 64 }, { x: 90, y: 92 }, { x: 270, y: 92 },
-  { x: 180, y: 96 }, { x: 138, y: 108 }, { x: 222, y: 108 }, { x: 85, y: 142 }, { x: 275, y: 142 },
-  { x: 155, y: 138 }, { x: 205, y: 138 }, { x: 115, y: 168 }, { x: 245, y: 168 }, { x: 180, y: 175 },
-  { x: 65, y: 172 }, { x: 295, y: 172 }, { x: 102, y: 205 }, { x: 258, y: 205 }, { x: 180, y: 218 },
-  { x: 135, y: 235 }, { x: 225, y: 235 }, { x: 80, y: 220 }, { x: 280, y: 220 }, { x: 180, y: 132 },
-  { x: 158, y: 88 }, { x: 202, y: 88 }, { x: 118, y: 132 }, { x: 242, y: 132 }, { x: 195, y: 174 },
-  { x: 138, y: 188 }, { x: 222, y: 188 }, { x: 105, y: 248 }, { x: 255, y: 248 }, { x: 180, y: 265 }
-] as const;
-
-const toSafeDate = (value?: string | null) => {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-const getMemoryDate = (memory: MemoryRecord) =>
-  toSafeDate(memory.date) ?? toSafeDate(memory.created_at);
-
-const monthTitle = (month: number) => `Tháng ${String(month).padStart(2, "0")}`;
-
-const formatExactDate = (memory: MemoryRecord) => {
-  const date = getMemoryDate(memory);
-  if (!date) return "?";
-  const d = String(date.getDate()).padStart(2, "0");
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const y = date.getFullYear();
-  return `${d}/${m}/${y}`;
-};
-
-const hashString = (value: string) => {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-};
-
-const getMemoryIconSeed = (memory: MemoryRecord) =>
-  `${memory.id}:${memory.title}:${memory.date ?? ""}`;
-
-const getMonthIconIndex = (seed: string) =>
-  MONTH_FLOWER_ICONS.length ? hashString(seed) % MONTH_FLOWER_ICONS.length : 0;
-
-const getMonthIconForSeed = (seed: string) =>
-  MONTH_FLOWER_ICONS[getMonthIconIndex(seed)] ?? MONTH_FLOWER_ICONS[0];
-
-const getMonthThemeForMonth = (month: number) =>
-  MONTH_ICON_THEMES[(month - 1) % MONTH_ICON_THEMES.length] ??
-  MONTH_ICON_THEMES[0];
-
 const FLOWER_FILTER = "saturate(1.65) contrast(1.25) brightness(0.95)";
 
-const getDelayClass = (seed: number) => `anim-d-${seed % 10}`;
+const monthTitle = (month: number) => `Tháng ${String(month).padStart(2, "0")}`;
 
 function YearTreeSvg({
   bucket,
@@ -201,15 +104,14 @@ function YearTreeSvg({
   onSelectMonth: (month: number) => void;
   registerExportSvg: (svg: SVGSVGElement | null) => void;
 }) {
-  const spreadCenter = { x: 180, y: 150 };
-  const spreadScale = 1.12;
+  // Using fixed positions now
   return (
     <svg
       ref={registerExportSvg}
       width="100%"
       viewBox="0 0 360 520"
-      preserveAspectRatio="xMidYMid meet"
-      className="block h-auto w-full"
+      preserveAspectRatio="xMidYMax slice"
+      className="block w-full h-full"
     >
       <style>{`
         .month-node-enter {
@@ -225,9 +127,6 @@ function YearTreeSvg({
         }
       `}</style>
       <defs>
-        <clipPath id="treeClip">
-          <rect x="0" y="0" width="360" height="520" rx="32" ry="32" />
-        </clipPath>
       </defs>
 
       <image
@@ -236,257 +135,124 @@ function YearTreeSvg({
         y="0"
         width="360"
         height="520"
-        preserveAspectRatio="xMidYMid slice"
-        clipPath="url(#treeClip)"
+        preserveAspectRatio="xMidYMax slice"
       />
 
+      {/* Pass 1: Render flower images (non-interactive, decorative) */}
       {MONTH_NODES.map((monthNode, monthIndex) => {
-        const count = bucket.months.get(monthNode.m)?.length ?? 0;
         const iconSrc = getYearIconForMonth(monthNode.m);
-        const theme = getYearThemeForMonth(monthNode.m);
-        const iconSize = 96;
-        const countFill = count > 0 ? theme.text : "rgba(90,90,90,0.55)";
-        const sx =
-          spreadCenter.x + (monthNode.x - spreadCenter.x) * spreadScale;
-        const sy =
-          spreadCenter.y + (monthNode.y - spreadCenter.y) * spreadScale;
-        const countY = sy + iconSize / 2 + 8;
+        const iconSize = 100;
+        const sx = monthNode.x;
+        const sy = monthNode.y;
         return (
-          <g
-            key={monthNode.m}
-            onClick={() => onSelectMonth(monthNode.m)}
-            cursor="pointer"
+          <image
+            key={`img-${monthNode.m}`}
+            href={iconSrc}
+            x={sx - iconSize / 2}
+            y={sy - iconSize / 2}
+            width={iconSize}
+            height={iconSize}
+            preserveAspectRatio="xMidYMid meet"
+            style={{ filter: FLOWER_FILTER, pointerEvents: "none", animationDelay: `${(monthIndex % 10) * 0.06}s` }}
             className="month-node-enter"
-            style={{ animationDelay: `${(monthIndex % 10) * 0.06}s` }}
-          >
-            <title>{monthTitle(monthNode.m)}</title>
-            <image
-              href={iconSrc}
-              x={sx - iconSize / 2}
-              y={sy - iconSize / 2}
-              width={iconSize}
-              height={iconSize}
-              preserveAspectRatio="xMidYMid meet"
-              style={{ filter: FLOWER_FILTER }}
-            />
-            <text
-              x={sx}
-              y={countY}
-              textAnchor="middle"
-              fill={countFill}
-              fontSize="7"
-              fontWeight="800"
-              opacity="0.9"
-            >
-              {count}
-            </text>
-          </g>
+          />
         );
       })}
 
+      {/* Pass 2: Render click targets + text (on top, sorted by Y desc so upper flowers are last = on top) */}
+      {[...MONTH_NODES]
+        .sort((a, b) => b.y - a.y)
+        .map((monthNode) => {
+          const count = bucket.months.get(monthNode.m)?.length ?? 0;
+          const theme = getYearThemeForMonth(monthNode.m);
+          const countFill = count > 0 ? theme.text : "rgba(90,90,90,0.55)";
+          const sx = monthNode.x;
+          const sy = monthNode.y;
+          const countY = sy + 38;
+          return (
+            <g
+              key={`click-${monthNode.m}`}
+              onClick={() => onSelectMonth(monthNode.m)}
+              cursor="pointer"
+            >
+              <title>{monthTitle(monthNode.m)}</title>
+              {/* Invisible click target circle */}
+              <circle cx={sx} cy={sy} r={40} fill="transparent" />
+              <text
+                x={sx}
+                y={sy + 8}
+                textAnchor="middle"
+                fill="#ffffff"
+                fontSize="28"
+                fontWeight="900"
+                stroke="rgba(0,0,0,0.4)"
+                strokeWidth="5"
+                paintOrder="stroke fill"
+                opacity="0.95"
+                className="pointer-events-none"
+              >
+                {monthNode.m}
+              </text>
+              <text
+                x={sx}
+                y={countY + 8}
+                textAnchor="middle"
+                fill={countFill}
+                fontSize="10"
+                fontWeight="800"
+                opacity="0.9"
+                className="pointer-events-none"
+              >
+                {count > 0 ? `${count} kỉ niệm` : count}
+              </text>
+            </g>
+          );
+        })}
+
+
       <text
         x="180"
-        y="30"
+        y="35"
         textAnchor="middle"
         fill="#ffffff"
-        fontSize="14"
-        fontWeight="800"
+        fontSize="16"
+        fontWeight="900"
         letterSpacing="2"
-        stroke="rgba(0,0,0,0.5)"
-        strokeWidth="3"
+        stroke="rgba(0,0,0,0.4)"
+        strokeWidth="4"
         paintOrder="stroke"
       >
-        VƯỜN KỈ NIỆM {bucket.year}
+        KỈ NIỆM {bucket.year}
       </text>
     </svg>
   );
 }
 
-function MonthMemorySvg({
-  year,
-  month,
-  memories,
-  selectedMemoryId,
-  onMemoryClick,
-  registerExportSvg,
-}: {
-  year: number;
-  month: number;
-  memories: MemoryRecord[];
-  selectedMemoryId: string | null;
-  onMemoryClick: (memoryId: string) => void;
-  registerExportSvg: (svg: SVGSVGElement | null) => void;
-}) {
-  const monthTheme = getMonthThemeForMonth(month);
-  const treeIconSrc = getMonthTreeIconForMonth(month);
-  const cx = 180;
-  const cy = 190;
-  const circlesCount = memories.length;
-  const circleSlots = Math.min(12, Math.max(6, circlesCount));
-  const laidOutMemories = useMemo(
-    () =>
-      memories.map((memory, index) => {
-        const count = memories.length;
-        const baseSize = count > 20 ? 36 : count > 12 ? 42 : count > 6 ? 48 : 54;
-        
-        const slotIdx = index % MEMORIES_CANOPY_SLOTS.length;
-        const ring = Math.floor(index / MEMORIES_CANOPY_SLOTS.length);
-        const slot = MEMORIES_CANOPY_SLOTS[slotIdx];
 
-        const iconSeed = getMemoryIconSeed(memory);
-        const seed = hashString(iconSeed);
 
-        // Thêm độ lệch nhẹ (jitter) nếu có nhiều hoa trùng ô hoặc để trông tự nhiên hơn
-        const jitterX = ring > 0 ? (seed % 30 - 15) * ring : (seed % 10 - 5);
-        const jitterY = ring > 0 ? (seed % 30 - 15) * ring : (seed % 10 - 5);
-          
-        const fx = slot.x + jitterX;
-        const fy = slot.y + jitterY;
-
-        return {
-          memory,
-          fx,
-          fy,
-          iconSrc: getMonthIconForSeed(iconSeed),
-          iconSize: selectedMemoryId === memory.id ? baseSize * 1.25 : baseSize,
-          baseDelayClass: getDelayClass(index + seed),
-          rotation: (seed % 12) - 6,
-          animationDelay: `${(index % 12) * 0.05}s`,
-        };
-      }),
-    [circleSlots, cx, cy, memories, selectedMemoryId],
-  );
-
-  return (
-    <svg
-      ref={registerExportSvg}
-      width="100%"
-      viewBox="0 0 360 520"
-      preserveAspectRatio="xMidYMid meet"
-      className="block h-auto w-full"
-    >
-      <style>{`
-        .memory-enter {
-          opacity: 0;
-          transform-box: fill-box;
-          transform-origin: center;
-          animation: memoryEnter .7s cubic-bezier(.34, 1.56, .64, 1) forwards;
-        }
-        .month-card-enter {
-          opacity: 0;
-          transform: translateY(12px) scale(0.96);
-          animation: monthCardEnter .34s ease forwards;
-        }
-        @keyframes memoryEnter {
-          0% { opacity: 0; transform: scale(0) rotate(-25deg); filter: blur(6px); }
-          60% { opacity: 1; transform: scale(1.15) rotate(5deg); filter: blur(0px); }
-          100% { opacity: 1; transform: scale(1) rotate(0deg); }
-        }
-        @keyframes monthCardEnter {
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-
-        .month-icon {
-          transform-box: fill-box;
-          transform-origin: center;
-          animation: iconFloat 4.4s ease-in-out infinite;
-        }
-
-        .anim-d-0 { animation-delay: 0s; }
-        .anim-d-1 { animation-delay: 0.12s; }
-        .anim-d-2 { animation-delay: 0.24s; }
-        .anim-d-3 { animation-delay: 0.36s; }
-        .anim-d-4 { animation-delay: 0.48s; }
-        .anim-d-5 { animation-delay: 0.6s; }
-        .anim-d-6 { animation-delay: 0.72s; }
-        .anim-d-7 { animation-delay: 0.84s; }
-        .anim-d-8 { animation-delay: 0.96s; }
-        .anim-d-9 { animation-delay: 1.08s; }
-
-        @keyframes iconFloat {
-          0%,100% { transform: translateY(0px) scale(0.98); }
-          50% { transform: translateY(-2px) scale(1.03); }
-        }
-      `}</style>
-
-      <defs></defs>
-
-      <rect
-        x="0"
-        y="0"
-        width="360"
-        height="520"
-        fill={`linear-gradient(180deg,${monthTheme.bg} 0%,#fff 100%)`}
-        opacity="0"
-      />
-      <image
-        href={treeIconSrc}
-        x="-15"
-        y="-20"
-        width="390"
-        height="560"
-        preserveAspectRatio="xMidYMid meet"
-      />
-
-      {laidOutMemories.map(
-        ({
-          memory,
-          fx,
-          fy,
-          iconSrc,
-          iconSize,
-          baseDelayClass,
-          rotation,
-          animationDelay,
-        }) => (
-          <g
-            key={memory.id}
-            onClick={() => onMemoryClick(memory.id)}
-            cursor="pointer"
-            className="memory-enter"
-            style={{ animationDelay }}
-          >
-            <image
-              href={iconSrc}
-              x={fx - iconSize / 2}
-              y={fy - iconSize / 2}
-              width={iconSize}
-              height={iconSize}
-              preserveAspectRatio="xMidYMid meet"
-              className={`month-icon ${baseDelayClass}`}
-              transform={`rotate(${rotation} ${fx} ${fy})`}
-              style={{ filter: FLOWER_FILTER }}
-            />
-          </g>
-        ),
-      )}
-
-      <text
-        x={150}
-        y={20}
-        textAnchor="middle"
-        fill={monthTheme.text}
-        fontSize="11"
-        fontWeight="700"
-        letterSpacing="1.1"
-      >
-        {monthTitle(month)} / {year}
-      </text>
-    </svg>
-  );
-}
-
-export default function FlowerTreeCanvas({
+function FlowerTreeCanvas({
   memories,
   selectedMemoryId,
   onMemoryClick,
   onExportSvgChange,
   bottomBar,
   startAtLatestYear = false,
+  roomId,
+  onAddMemory,
 }: FlowerTreeCanvasProps & {
   bottomBar?: React.ReactNode;
+  onAddMemory?: () => void;
 }) {
+  const router = useRouter();
+
   const yearBuckets = useMemo<YearBucket[]>(() => {
+    const toSafeDate = (value?: string | null) => {
+      if (!value) return null;
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    };
+    const getMemoryDate = (memory: MemoryRecord) =>
+      toSafeDate(memory.date) ?? toSafeDate(memory.created_at);
     const yearMap = new Map<number, Map<number, MemoryRecord[]>>();
 
     memories.forEach((memory) => {
@@ -516,18 +282,16 @@ export default function FlowerTreeCanvas({
   const [activeYearIndex, setActiveYearIndex] = useState(() =>
     startAtLatestYear ? Math.max(0, yearBuckets.length - 1) : 0,
   );
-  const [activeMonth, setActiveMonth] = useState<number | null>(null);
   const [direction, setDirection] = useState(0);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const goPrevYear = () => {
     setDirection(-1);
-    setActiveMonth(null);
     setActiveYearIndex((idx) => Math.max(0, idx - 1));
   };
 
   const goNextYear = () => {
     setDirection(1);
-    setActiveMonth(null);
     setActiveYearIndex((idx) => Math.min(yearBuckets.length - 1, idx + 1));
   };
 
@@ -536,11 +300,6 @@ export default function FlowerTreeCanvas({
     Math.max(0, yearBuckets.length - 1),
   );
   const activeYear = yearBuckets[safeActiveYearIndex] ?? null;
-  const activeMonthMemories =
-    activeYear && activeMonth ? (activeYear.months.get(activeMonth) ?? []) : [];
-  const activeMonthTheme = activeMonth
-    ? getMonthThemeForMonth(activeMonth)
-    : MONTH_ICON_THEMES[0];
 
   if (!yearBuckets.length) {
     onExportSvgChange(null);
@@ -553,39 +312,18 @@ export default function FlowerTreeCanvas({
 
   return (
     <div
-      className="mt-1 mx-auto w-full max-w-[430px] overflow-hidden rounded-2xl relative"
+      className="mx-auto w-full h-dvh overflow-hidden relative"
       style={{
-        background:
-          "linear-gradient(150deg, #fff0f6 0%, #fff5ed 28%, #fff9e6 55%, #f5f0ff 80%, #fff1f7 100%)",
+        background: "linear-gradient(to bottom, #e0f2ff, #fff5f8)"
       }}
     >
-      {/* Background glow blobs */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-        <div
-          className="absolute top-0 left-[10%] w-[45%] h-[35%] rounded-full blur-[60px] opacity-40"
-          style={{
-            background: "radial-gradient(circle, #f3b0c8, transparent)",
-          }}
-        />
-        <div
-          className="absolute top-[20%] right-0 w-[40%] h-[40%] rounded-full blur-[60px] opacity-30"
-          style={{
-            background: "radial-gradient(circle, #f7c09b, transparent)",
-          }}
-        />
-        <div
-          className="absolute bottom-[10%] left-0 w-[45%] h-[40%] rounded-full blur-[60px] opacity-30"
-          style={{
-            background: "radial-gradient(circle, #f5e29b, transparent)",
-          }}
-        />
-        <div
-          className="absolute bottom-0 right-[10%] w-[40%] h-[35%] rounded-full blur-[60px] opacity-30"
-          style={{
-            background: "radial-gradient(circle, #e4c1d6, transparent)",
-          }}
-        />
-      </div>
+      {isNavigating && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/20 backdrop-blur-sm">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/40 border-t-white"></div>
+          <p className="mt-3 text-xs font-bold text-white drop-shadow-md animate-pulse">Đang mở...</p>
+        </div>
+      )}
+
 
       {/* Year selector + nav — compact row, flush with edges */}
       <div className="relative z-10 flex items-center gap-1 px-2 pt-2 pb-1">
@@ -614,7 +352,6 @@ export default function FlowerTreeCanvas({
                         : -1,
                   );
                   setActiveYearIndex(idx);
-                  setActiveMonth(null);
                 }}
                 className={`flex-shrink-0 rounded-full px-3 py-0.5 text-[10px] font-bold transition-all border ${
                   isActive
@@ -636,12 +373,21 @@ export default function FlowerTreeCanvas({
         >
           ▶
         </button>
+
+        {onAddMemory && (
+          <button
+            type="button"
+            onClick={onAddMemory}
+            className="flex-shrink-0 rounded-full bg-emerald-500 text-white px-3 py-1 text-[10px] font-bold shadow-sm hover:bg-emerald-600 transition-all"
+          >
+            + Thêm
+          </button>
+        )}
       </div>
 
       <div
-        className="rounded-3xl border border-white/40 bg-white/30 p-4 transition-all duration-700 shadow-xl backdrop-blur-sm"
+        className="absolute inset-0 z-0"
         onTouchStart={(event) => {
-          if (activeMonth) return; // lock swipe when in month view
           const touch = event.changedTouches[0];
           if (!touch) return;
           touchStartRef.current = {
@@ -650,7 +396,6 @@ export default function FlowerTreeCanvas({
           };
         }}
         onTouchEnd={(event) => {
-          if (activeMonth) return; // lock swipe when in month view
           if (!touchStartRef.current) return;
           const touch = event.changedTouches[0];
           if (!touch) return;
@@ -668,146 +413,34 @@ export default function FlowerTreeCanvas({
           }
         }}
       >
-        <div className="relative z-10">
+        <div className="relative h-full w-full">
           <AnimatePresence mode="wait" custom={direction}>
             <motion.div
-              key={
-                activeYear?.year + (activeMonth ? `-${activeMonth}` : "-tree")
-              }
+              key={activeYear?.year ?? "tree"}
               custom={direction}
               initial={{ x: direction * 80, opacity: 0, scale: 0.9 }}
               animate={{ x: 0, opacity: 1, scale: 1 }}
               exit={{ x: -direction * 80, opacity: 0, scale: 0.9 }}
               transition={{ type: "spring", stiffness: 200, damping: 25 }}
-              className="w-full flex items-center justify-center"
+              className="absolute inset-0 flex items-center justify-center"
             >
-              {activeYear && activeMonth ? (
-                <div className="w-full">
-                  <div className="mb-4 flex items-center justify-between gap-2 px-2">
-                    <button
-                      type="button"
-                      onClick={() => setActiveMonth(null)}
-                      className="rounded-full border border-emerald-500/20 bg-white/60 px-4 py-1.5 text-xs font-bold text-emerald-700 backdrop-blur-md hover:bg-white/80 transition-all"
-                    >
-                      ← {activeYear.year}
-                    </button>
-                    <span className="rounded-full border border-emerald-500/10 bg-white/40 px-4 py-1.5 text-[12px] font-bold text-emerald-700">
-                      {monthTitle(activeMonth)} • {activeMonthMemories.length}{" "}
-                      HOA
-                    </span>
-                  </div>
-                  <MonthMemorySvg
-                    year={activeYear.year}
-                    month={activeMonth}
-                    memories={activeMonthMemories}
-                    selectedMemoryId={selectedMemoryId}
-                    onMemoryClick={onMemoryClick}
-                    registerExportSvg={onExportSvgChange}
-                  />
-
-                  {activeMonthMemories.length > 0 && (
-                    <div className="mt-6 grid grid-cols-2 gap-3 pb-2">
-                      {activeMonthMemories.map((m, index) => {
-                        const badgeBg = activeMonthTheme.badge;
-                        const iconSrc = getMonthIconForSeed(
-                          getMemoryIconSeed(m),
-                        );
-                        return (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => onMemoryClick(m.id)}
-                            className="month-card-enter flex items-center gap-3 rounded-2xl border border-emerald-500/10 bg-white/50 p-3 text-left shadow-md backdrop-blur-lg transition-all hover:-translate-y-0.5 hover:bg-white/70 hover:shadow-lg"
-                            style={{
-                              animationDelay: `${(index % 12) * 0.04}s`,
-                            }}
-                          >
-                            <div
-                              className={`flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl border text-xl shadow-sm ${badgeBg}`}
-                            >
-                              <img
-                                src={iconSrc}
-                                alt=""
-                                aria-hidden="true"
-                                className="h-12 w-12 object-contain"
-                                style={{ filter: FLOWER_FILTER }}
-                              />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-[12px] font-black text-emerald-900 leading-tight whitespace-normal break-words">
-                                {m.title}
-                              </p>
-                              <p className="text-[10px] font-medium text-emerald-700/60">
-                                {formatExactDate(m)}
-                              </p>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="w-full py-4">
-                  <YearTreeSvg
-                    bucket={activeYear!}
-                    onSelectMonth={setActiveMonth}
-                    registerExportSvg={onExportSvgChange}
-                  />
-                  <div className="mt-3 grid grid-cols-3 gap-3 px-2">
-                    {Array.from({ length: 12 }).map((_, idx) => {
-                      const month = idx + 1;
-                      const count = activeYear?.months.get(month)?.length ?? 0;
-                      const iconSrc = getMonthTreeIconForMonth(month);
-                      const flowerSrc = getMonthIconForMonth(month);
-                      return (
-                        <button
-                          key={`detail-month-${month}`}
-                          type="button"
-                          onClick={() => setActiveMonth(month)}
-                          className={`flex flex-col items-center gap-1 rounded-xl border border-emerald-500/10 bg-white/60 px-2 py-2 text-[10px] font-semibold text-emerald-800/80 transition-all hover:bg-white/85 ${
-                            count === 0 ? "opacity-60" : ""
-                          }`}
-                        >
-                          <img
-                            src={flowerSrc}
-                            alt=""
-                            aria-hidden="true"
-                            className="h-16 w-16 object-contain"
-                            style={{ filter: FLOWER_FILTER }}
-                          />
-                          <img
-                            src={iconSrc}
-                            alt=""
-                            aria-hidden="true"
-                            className="h-12 w-12 object-contain"
-                          />
-                          <span>{monthTitle(month)}</span>
-                          <span className="text-[9px] font-medium text-emerald-700/60">
-                            {count} hoa
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              <div className="h-full w-full">
+                <YearTreeSvg
+                  bucket={activeYear!}
+                  onSelectMonth={(month) => {
+                    if (!activeYear) return;
+                    setIsNavigating(true);
+                    router.push(`/friends/${roomId}/timeline/${activeYear.year}/${month}`);
+                  }}
+                  registerExportSvg={onExportSvgChange}
+                />
+              </div>
             </motion.div>
           </AnimatePresence>
         </div>
-        {activeYear && !activeMonth ? (
-          <p className="text-center text-[10px] font-medium text-emerald-700/60 pb-1">
-            Nhấn vào tháng để xem hoa kỉ niệm
-          </p>
-        ) : null}
-
-        {/* Bottom Toolbar injected from outside */}
-        {bottomBar && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-emerald-500/10 pt-3 pb-1 px-1">
-            {bottomBar}
-          </div>
-        )}
       </div>
     </div>
   );
 }
+
+export default memo(FlowerTreeCanvas);

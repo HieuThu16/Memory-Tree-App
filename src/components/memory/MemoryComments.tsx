@@ -16,6 +16,7 @@ import {
   deleteComment,
   saveCommentMedia,
 } from "@/lib/actions";
+import { getMediaPublicUrl as resolveMediaPublicUrl } from "@/lib/media";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useUiStore } from "@/lib/stores/uiStore";
 
@@ -26,12 +27,6 @@ const commentTimeFormatter = new Intl.DateTimeFormat("vi-VN", {
   hour: "2-digit",
   minute: "2-digit",
 });
-
-function getMediaPublicUrl(storagePath: string) {
-  const supabase = createSupabaseBrowserClient();
-  const { data } = supabase.storage.from("media").getPublicUrl(storagePath);
-  return data.publicUrl;
-}
 
 function CommentMediaPreview({
   file,
@@ -81,7 +76,7 @@ function CommentMediaItem({
   storagePath: string;
   mediaType: string | null;
 }) {
-  const url = getMediaPublicUrl(storagePath);
+  const url = resolveMediaPublicUrl(storagePath);
   const isVideo = mediaType?.startsWith("video") ?? false;
 
   return isVideo ? (
@@ -249,6 +244,7 @@ export default function MemoryComments({
   onCommentSubmitted?: () => void;
 }) {
   const addToast = useUiStore((s) => s.addToast);
+  const supabase = useMemo(() => createSupabaseBrowserClient(), []);
   const [comments, setComments] = useState<CommentWithAuthor[]>([]);
   const [newContent, setNewContent] = useState("");
   const [mediaFiles, setMediaFiles] = useState<File[]>([]);
@@ -277,7 +273,6 @@ export default function MemoryComments({
 
   // Realtime subscription for comments
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
     const channel = supabase
       .channel(`comments:${memoryId}`)
       .on(
@@ -298,7 +293,7 @@ export default function MemoryComments({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [memoryId, loadComments]);
+  }, [loadComments, memoryId, supabase]);
 
   // Auto-scroll on new comments
   useEffect(() => {
@@ -341,7 +336,6 @@ export default function MemoryComments({
 
       // Upload media if any
       if (mediaFiles.length > 0) {
-        const supabase = createSupabaseBrowserClient();
         const mediaItems: {
           comment_id: string;
           storage_path: string;
@@ -428,7 +422,7 @@ export default function MemoryComments({
             </div>
           ) : comments.length === 0 ? (
             <p className="py-4 text-center text-xs text-text-muted">
-              Chưa có bình luận nào. Hãy là người đầu tiên! 🌸
+             {/* Chưa có bình luận nào. Hãy là người đầu tiên! */}
             </p>
           ) : (
             <div className="space-y-1">

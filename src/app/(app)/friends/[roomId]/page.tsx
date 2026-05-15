@@ -8,9 +8,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getRoomMemories } from "@/lib/supabase/queries/memories";
 import RealtimeRoomProvider from "@/components/realtime/RealtimeRoomProvider";
 import LiveCursor from "@/components/realtime/LiveCursor";
-import PresenceAvatars from "@/components/realtime/PresenceAvatars";
-import InviteLinkButton from "@/components/room/InviteLinkButton";
-import BackButton from "@/components/ui/BackButton";
 
 export const dynamic = "force-dynamic";
 
@@ -69,25 +66,18 @@ export default async function RoomPage({
       <RealtimeRoomProvider roomId={roomId} user={user} />
       <LiveCursor />
 
-      <main className="px-3 pb-24 pt-3 sm:px-6 sm:pt-4">
-        <section className="mx-auto flex w-full max-w-5xl flex-col gap-3 sm:gap-4">
-          {/* Room header - all on one row */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <BackButton href="/friends" className="text-[11px]" />
-              <h1 className="flex items-center gap-1 truncate text-sm font-bold text-rose-900 sm:text-base">
-                <span className="text-base">🌿</span>
-                <span className="truncate">{room.name || "Khu vườn chung"}</span>
-              </h1>
-            </div>
-            
-            {/* Right side: avatars + stats + add + invite */}
-            <div className="flex flex-shrink-0 items-center gap-1.5">
-              <PresenceAvatars />
-              <InviteLinkButton inviteCode={roomRecord.invite_code} />
-            </div>
-          </div>
+      <main className="relative h-dvh w-full overflow-hidden">
+        {/* Fixed Background Tree */}
+        <div className="fixed inset-0 z-0 pointer-events-none">
+          <img 
+            src="/new_tree.png" 
+            alt="" 
+            className="w-full h-full object-cover opacity-20 blur-[2px]" 
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/40 to-white/80" />
+        </div>
 
+        <section className="relative z-10 flex h-full w-full flex-col">
           <RoomClientSection
             memories={memories}
             roomId={roomId}
